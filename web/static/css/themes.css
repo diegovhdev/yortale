@@ -1,0 +1,83 @@
+/*fuentes de la pagina*/
+:root {
+  font-family:
+    "Roboto",
+    system-ui,
+    -apple-system,
+    sans-serif;
+}
+
+/*Capa 1: paleta de valores*/
+:root {
+  /*pink*/
+  --color-pink-50: oklch(0.984 0.007 340.72);
+  --color-pink-100: oklch(0.959 0.014 343.36);
+  --color-pink-200: oklch(0.925 0.029 341.45);
+  --color-pink-300: oklch(0.886 0.045 343.43);
+  --color-pink-400: oklch(0.845 0.064 343.18);
+  --color-pink-500: oklch(0.812 0.081 342.23);
+  --color-pink-600: oklch(0.772 0.101 342.73);
+  --color-pink-700: oklch(0.735 0.123 342.55);
+  --color-pink-800: oklch(0.544 0.144 342.66);
+  --color-pink-900: oklch(0.34 0.089 342.92);
+  --color-pink-950: oklch(0.241 0.064 341.8);
+
+  /*ink-black*/
+  --color-ink-black-50: oklch(0.941 0.014 272.74);
+  --color-ink-black-100: oklch(0.889 0.025 271.14);
+  --color-ink-black-200: oklch(0.769 0.058 269.54);
+  --color-ink-black-300: oklch(0.658 0.088 266.84);
+  --color-ink-black-400: oklch(0.536 0.086 266.07);
+  --color-ink-black-500: oklch(0.424 0.069 265.61);
+  --color-ink-black-600: oklch(0.304 0.048 265.51);
+  --color-ink-black-700: oklch(0.188 0.03 265.88);
+  --color-ink-black-800: oklch(0.165 0.027 266.2);
+  --color-ink-black-900: oklch(0.13 0.022 264.6);
+  --color-ink-black-950: oklch(0.105 0.015 255.88);
+
+  /*gray*/
+  --color-gray-50: oklch(0.965 0.003 286.81);
+  --color-gray-100: oklch(0.922 0.005 275.1);
+  --color-gray-200: oklch(0.846 0.01 273.4);
+  --color-gray-300: oklch(0.768 0.016 273.83);
+  --color-gray-400: oklch(0.69 0.021 270.13);
+  --color-gray-500: oklch(0.613 0.024 268.3);
+  --color-gray-600: oklch(0.535 0.021 268.91);
+  --color-gray-700: oklch(0.461 0.019 269.76);
+  --color-gray-800: oklch(0.353 0.014 269.29);
+  --color-gray-900: oklch(0.24 0.01 276.7);
+  --color-gray-950: oklch(0.187 0.008 274.47);
+
+  /*green*/
+  --color-green-50: #ffffff;
+  --color-green-100: #ffffff;
+  --color-green-200: oklch(0.991 0.011 136.38);
+  --color-green-300: oklch(0.991 0.011 136.38);
+  --color-green-400: oklch(0.981 0.02 135.73);
+  --color-green-500: oklch(0.981 0.02 135.73);
+  --color-green-600: oklch(0.972 0.031 137.76);
+  --color-green-700: oklch(0.966 0.035 137.42);
+  --color-green-800: oklch(0.682 0.09 136.48);
+  --color-green-900: oklch(0.409 0.055 136.6);
+  --color-green-950: oklch(0.272 0.036 135.58);
+
+  /*peach*/
+  --color-peach-50: oklch(0.976 0.012 4.91);
+  --color-peach-100: oklch(0.955 0.023 4.56);
+  --color-peach-200: oklch(0.87 0.073 4.78);
+  --color-peach-300: oklch(0.784 0.132 5.13);
+  --color-peach-400: oklch(0.707 0.196 5.01);
+  --color-peach-500: oklch(0.62 0.249 5.63);
+  --color-peach-600: oklch(0.527 0.212 5.62);
+  --color-peach-700: oklch(0.428 0.172 5.85);
+  --color-peach-800: oklch(0.337 0.135 5.51);
+  --color-peach-900: oklch(0.236 0.095 5.35);
+  --color-peach-950: oklch(0.186 0.075 5.54);
+}
+
+:root {
+  --color-brand-primary: var(--color-gray-900);
+  --color-brand-primary-hover: var(--color-gray-800);
+  --color-brand-secondary: var(--color-pink-700);
+  --color-brand-secondary-hover: var(--color-pink-800);
+}
