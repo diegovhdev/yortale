@@ -1,0 +1,29 @@
+/* Estilos mínimos, solo para que los formularios sean legibles. */
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 28rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  line-height: 1.5;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 1rem;
+}
+
+.field input[type="text"],
+.field input[type="email"],
+.field input[type="password"] {
+  padding: 0.4rem;
+  font-size: 1rem;
+}
+
+.error {
+  color: #b00020;
+}
+
+[aria-invalid="true"] {
+  border-color: #b00020;
+}

@@ -1,0 +1,35 @@
+package components
+
+type FieldProps struct {
+	Label        string
+	Name         string
+	Type         string // text, email, password...
+	Value        string
+	Error        string
+	Autocomplete string
+	Required     bool
+	Attrs        templ.Attributes // atributos extra: minlength, maxlength, pattern...
+}
+
+// Field es un campo de formulario con su etiqueta y su mensaje de error.
+templ Field(p FieldProps) {
+	<div class="field">
+		<label for={ p.Name }>{ p.Label }</label>
+		<input
+			id={ p.Name }
+			name={ p.Name }
+			type={ p.Type }
+			value={ p.Value }
+			autocomplete={ p.Autocomplete }
+			required?={ p.Required }
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+			{ p.Attrs... }
+		/>
+		if p.Error != "" {
+			<small id={ p.Name + "-error" } class="error">{ p.Error }</small>
+		}
+	</div>
+}

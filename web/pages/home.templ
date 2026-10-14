@@ -1,0 +1,24 @@
+package pages
+
+import (
+	"github.com/diegovhdev/yortale/internal/models"
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// HomePage es temporal: solo sirve para comprobar que la sesión funciona.
+templ HomePage(user *models.User) {
+	@components.Layout("Inicio") {
+		if user != nil {
+			<h1>Hola, { user.Name() }</h1>
+			<p>Iniciaste sesión como <strong>{ user.Username }</strong> ({ user.Email }).</p>
+			<form action="/cerrar-sesion" method="post">
+				<button type="submit">Cerrar sesión</button>
+			</form>
+		} else {
+			<h1>Bienvenido a YorTale</h1>
+			<p>
+				<a href="/iniciar-sesion">Inicia sesión</a> o <a href="/registro">crea una cuenta</a>.
+			</p>
+		}
+	}
+}

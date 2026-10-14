@@ -1,0 +1,86 @@
+package pages
+
+import "github.com/diegovhdev/yortale/web/components"
+
+templ RegisterPage(f RegisterForm) {
+	@components.Layout("Crear cuenta") {
+		<h1>Crear cuenta</h1>
+		@RegisterFormFragment(f)
+		<p>¿Ya tienes cuenta? <a href="/iniciar-sesion">Inicia sesión</a></p>
+	}
+}
+
+// RegisterFormFragment es solo el formulario. htmx lo reemplaza completo (outerHTML)
+// con la respuesta del servidor cuando hay errores.
+// action y method hacen que el formulario funcione también sin JavaScript.
+templ RegisterFormFragment(f RegisterForm) {
+	<form
+		id="register-form"
+		action="/registro"
+		method="post"
+		hx-post="/registro"
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Field(components.FieldProps{
+			Label:        "Nombre de usuario",
+			Name:         "username",
+			Type:         "text",
+			Value:        f.Username,
+			Error:        f.Errors["username"],
+			Autocomplete: "username",
+			Required:     true,
+			Attrs:        templ.Attributes{"minlength": "3", "maxlength": "30", "pattern": "[A-Za-z0-9_]+"},
+		})
+		@components.Field(components.FieldProps{
+			Label:        "Correo electrónico",
+			Name:         "email",
+			Type:         "email",
+			Value:        f.Email,
+			Error:        f.Errors["email"],
+			Autocomplete: "email",
+			Required:     true,
+		})
+		@components.Field(components.FieldProps{
+			Label:        "Contraseña",
+			Name:         "password",
+			Type:         "password",
+			Error:        f.Errors["password"],
+			Autocomplete: "new-password",
+			Required:     true,
+			Attrs:        templ.Attributes{"minlength": "8", "maxlength": "128"},
+		})
+		@components.Field(components.FieldProps{
+			Label:        "Confirmar contraseña",
+			Name:         "password_confirm",
+			Type:         "password",
+			Error:        f.Errors["password_confirm"],
+			Autocomplete: "new-password",
+			Required:     true,
+		})
+		<div class="field">
+			<label>
+				<input
+					type="checkbox"
+					name="accept_terms"
+					required
+					checked?={ f.AcceptTerms }
+					if f.Errors["accept_terms"] != "" {
+						aria-invalid="true"
+						aria-describedby="accept_terms-error"
+					}
+				/>
+				Acepto los <a href="/terminos" target="_blank">términos de uso</a>
+			</label>
+			if f.Errors["accept_terms"] != "" {
+				<small id="accept_terms-error" class="error">{ f.Errors["accept_terms"] }</small>
+			}
+		</div>
+		<button type="submit">Crear cuenta</button>
+		<span class="htmx-indicator">Creando cuenta…</span>
+	</form>
+}

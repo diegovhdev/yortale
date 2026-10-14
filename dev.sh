@@ -10,5 +10,5 @@ templ generate --watch \
   --proxyport=$PROXY_PORT \
   --open-browser=true \
   --watch-pattern="(.+\.go$)|(.+\.templ$)|(.+\.css$)|(.+\.js$)" \
-  --cmd="go run ."
+  --cmd="go run cmd/server/main.go"
  

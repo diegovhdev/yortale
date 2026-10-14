@@ -1,0 +1,23 @@
+package components
+
+// Layout es la estructura HTML común a todas las páginas.
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="es">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title } · YorTale</title>
+			<link rel="stylesheet" href="/static/css/app.css"/>
+			<script src="/static/js/htmx.min.js" defer></script>
+		</head>
+		<body>
+			<header>
+				<a href="/"><strong>YorTale</strong></a>
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
