@@ -5,37 +5,44 @@ import (
 	"io/fs"
 	"net/http"
 
-	"github.com/diegovhdev/yortale/internal/handler"
-	"github.com/diegovhdev/yortale/internal/middleware"
-	"github.com/diegovhdev/yortale/internal/service"
+	"github.com/diegovhdev/yortale/internal/auth"
+	"github.com/diegovhdev/yortale/internal/home"
+	"github.com/diegovhdev/yortale/internal/platform/middleware"
 	"github.com/diegovhdev/yortale/web"
 )
 
 type Deps struct {
-	Auth          *service.AuthService
+	Auth          *auth.Service
 	SecureCookies bool
 }
 
 func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
-	auth := handler.NewAuthHandler(d.Auth, d.SecureCookies)
+	authHandler := auth.NewHandler(d.Auth, d.SecureCookies)
 
 	// Archivos estáticos (css, js) incluidos dentro del binario con go:embed.
 	static, _ := fs.Sub(web.StaticFS, "static")
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 
-	mux.HandleFunc("GET /{$}", handler.Home)
+	mux.HandleFunc("GET /{$}", home.Home)
 
-	mux.HandleFunc("GET /registro", auth.ShowRegister)
-	mux.HandleFunc("POST /registro", auth.Register)
-	mux.HandleFunc("GET /iniciar-sesion", auth.ShowLogin)
-	mux.HandleFunc("POST /iniciar-sesion", auth.Login)
-	mux.HandleFunc("POST /cerrar-sesion", auth.Logout)
+	mux.HandleFunc("GET /registro", authHandler.ShowRegister)
+	mux.HandleFunc("POST /registro", authHandler.Register)
+	mux.HandleFunc("GET /iniciar-sesion", authHandler.ShowLogin)
+	mux.HandleFunc("POST /iniciar-sesion", authHandler.Login)
+	mux.HandleFunc("POST /cerrar-sesion", authHandler.Logout)
+
+	// Protección CSRF de la librería estándar: rechaza POST/PUT/PATCH/DELETE de otros sitios
+	// según Sec-Fetch-Site u Origin. Junto con SameSite=Lax en la cookie, evita usar tokens.
+	csrf := http.NewCrossOriginProtection()
+	csrf.SetDenyHandler(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "Petición de origen cruzado rechazada", http.StatusForbidden)
+	}))
 
 	// El orden importa: Logger envuelve todo, luego la protección CSRF y luego la sesión.
 	var h http.Handler = mux
-	h = middleware.LoadUser(d.Auth, d.SecureCookies)(h)
-	h = middleware.SameOrigin(h)
+	h = auth.LoadUser(d.Auth, d.SecureCookies)(h)
+	h = csrf.Handler(h)
 	h = middleware.Logger(h)
 	return h
 }

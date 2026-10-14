@@ -1,4 +1,4 @@
-package service
+package auth
 
 import (
 	"crypto/rand"
@@ -26,16 +26,14 @@ var errInvalidHash = errors.New("formato de hash inválido")
 
 // HashPassword devuelve un hash en formato estándar:
 // $argon2id$v=19$m=19456,t=2,p=1$<salt>$<hash>
-func HashPassword(password string) (string, error) {
+func HashPassword(password string) string {
 	salt := make([]byte, argonSaltLen)
-	if _, err := rand.Read(salt); err != nil {
-		return "", err
-	}
+	rand.Read(salt) // desde Go 1.24 nunca devuelve error
 	key := argon2.IDKey([]byte(password), salt, argonTime, argonMemory, argonThreads, argonKeyLen)
 	b64 := base64.RawStdEncoding
 	return fmt.Sprintf("$argon2id$v=%d$m=%d,t=%d,p=%d$%s$%s",
 		argon2.Version, argonMemory, argonTime, argonThreads,
-		b64.EncodeToString(salt), b64.EncodeToString(key)), nil
+		b64.EncodeToString(salt), b64.EncodeToString(key))
 }
 
 // VerifyPassword compara una contraseña con un hash guardado, en tiempo constante.

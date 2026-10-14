@@ -1,12 +1,12 @@
-package pages
+package home
 
 import (
-	"github.com/diegovhdev/yortale/internal/models"
+	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/web/components"
 )
 
 // HomePage es temporal: solo sirve para comprobar que la sesión funciona.
-templ HomePage(user *models.User) {
+templ HomePage(user *auth.User) {
 	@components.Layout("Inicio") {
 		if user != nil {
 			<h1>Hola, { user.Name() }</h1>

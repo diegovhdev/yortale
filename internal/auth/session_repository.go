@@ -1,4 +1,4 @@
-package repository
+package auth
 
 import (
 	"context"
@@ -8,8 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-
-	"github.com/diegovhdev/yortale/internal/models"
 )
 
 type SessionRepository struct {
@@ -31,7 +29,7 @@ func (r *SessionRepository) Create(ctx context.Context, tokenHash string, userID
 }
 
 // GetUser devuelve el usuario dueño de una sesión que todavía no ha expirado.
-func (r *SessionRepository) GetUser(ctx context.Context, tokenHash string) (models.User, error) {
+func (r *SessionRepository) GetUser(ctx context.Context, tokenHash string) (User, error) {
 	const q = `
 		SELECT ` + userColumns + `
 		FROM sessions s
@@ -40,10 +38,10 @@ func (r *SessionRepository) GetUser(ctx context.Context, tokenHash string) (mode
 
 	user, err := scanUser(r.db.QueryRow(ctx, q, tokenHash))
 	if errors.Is(err, pgx.ErrNoRows) {
-		return models.User{}, ErrNotFound
+		return User{}, ErrNotFound
 	}
 	if err != nil {
-		return models.User{}, fmt.Errorf("buscar sesión: %w", err)
+		return User{}, fmt.Errorf("buscar sesión: %w", err)
 	}
 	return user, nil
 }

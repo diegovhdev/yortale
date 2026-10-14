@@ -1,1 +1,5 @@
 .env
+.claude
+docs/
+db/
+CLAUDE.md

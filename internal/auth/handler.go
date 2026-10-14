@@ -1,22 +1,20 @@
-package handler
+package auth
 
 import (
 	"errors"
 	"log/slog"
 	"net/http"
 
-	"github.com/diegovhdev/yortale/internal/middleware"
-	"github.com/diegovhdev/yortale/internal/service"
-	"github.com/diegovhdev/yortale/web/pages"
+	"github.com/diegovhdev/yortale/internal/platform/httpx"
 )
 
-type AuthHandler struct {
-	auth          *service.AuthService
+type Handler struct {
+	auth          *Service
 	secureCookies bool
 }
 
-func NewAuthHandler(auth *service.AuthService, secureCookies bool) *AuthHandler {
-	return &AuthHandler{auth: auth, secureCookies: secureCookies}
+func NewHandler(auth *Service, secureCookies bool) *Handler {
+	return &Handler{auth: auth, secureCookies: secureCookies}
 }
 
 const genericError = "Algo salió mal. Inténtalo de nuevo en un momento."
@@ -24,28 +22,28 @@ const genericError = "Algo salió mal. Inténtalo de nuevo en un momento."
 // ---------- Registro ----------
 
 // GET /registro
-func (h *AuthHandler) ShowRegister(w http.ResponseWriter, r *http.Request) {
-	if middleware.CurrentUser(r.Context()) != nil {
+func (h *Handler) ShowRegister(w http.ResponseWriter, r *http.Request) {
+	if CurrentUser(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	render(w, r, http.StatusOK, pages.RegisterPage(pages.RegisterForm{}))
+	httpx.Render(w, r, http.StatusOK, RegisterPage(RegisterForm{}))
 }
 
 // POST /registro
-func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Formulario inválido", http.StatusBadRequest)
 		return
 	}
 	// Los valores escritos se devuelven al formulario si hay errores (excepto contraseñas).
-	form := pages.RegisterForm{
+	form := RegisterForm{
 		Username:    r.PostFormValue("username"),
 		Email:       r.PostFormValue("email"),
 		AcceptTerms: r.PostFormValue("accept_terms") == "on",
 	}
 
-	user, err := h.auth.Register(r.Context(), service.RegisterInput{
+	user, err := h.auth.Register(r.Context(), RegisterInput{
 		Username:        form.Username,
 		Email:           form.Email,
 		Password:        r.PostFormValue("password"),
@@ -53,7 +51,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		AcceptTerms:     form.AcceptTerms,
 	})
 
-	var verrs service.ValidationErrors
+	var verrs ValidationErrors
 	switch {
 	case errors.As(err, &verrs):
 		form.Errors = verrs
@@ -69,43 +67,43 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// Cuenta creada: se inicia sesión de inmediato.
 	if err := h.startSession(w, r, user.ID); err != nil {
 		slog.Error("iniciar sesión tras registro", "err", err)
-		redirect(w, r, "/iniciar-sesion")
+		httpx.Redirect(w, r, "/iniciar-sesion")
 		return
 	}
-	redirect(w, r, "/")
+	httpx.Redirect(w, r, "/")
 }
 
 // Con htmx se devuelve solo el formulario; sin JavaScript, la página completa.
-func (h *AuthHandler) renderRegister(w http.ResponseWriter, r *http.Request, status int, form pages.RegisterForm) {
-	if isHTMX(r) {
-		render(w, r, status, pages.RegisterFormFragment(form))
+func (h *Handler) renderRegister(w http.ResponseWriter, r *http.Request, status int, form RegisterForm) {
+	if httpx.IsHTMX(r) {
+		httpx.Render(w, r, status, RegisterFormFragment(form))
 		return
 	}
-	render(w, r, status, pages.RegisterPage(form))
+	httpx.Render(w, r, status, RegisterPage(form))
 }
 
 // ---------- Inicio de sesión ----------
 
 // GET /iniciar-sesion
-func (h *AuthHandler) ShowLogin(w http.ResponseWriter, r *http.Request) {
-	if middleware.CurrentUser(r.Context()) != nil {
+func (h *Handler) ShowLogin(w http.ResponseWriter, r *http.Request) {
+	if CurrentUser(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
 		return
 	}
-	render(w, r, http.StatusOK, pages.LoginPage(pages.LoginForm{}))
+	httpx.Render(w, r, http.StatusOK, LoginPage(LoginForm{}))
 }
 
 // POST /iniciar-sesion
-func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Formulario inválido", http.StatusBadRequest)
 		return
 	}
-	form := pages.LoginForm{Login: r.PostFormValue("login")}
+	form := LoginForm{Login: r.PostFormValue("login")}
 
 	user, err := h.auth.Authenticate(r.Context(), form.Login, r.PostFormValue("password"))
 	switch {
-	case errors.Is(err, service.ErrInvalidCredentials):
+	case errors.Is(err, ErrInvalidCredentials):
 		form.General = "Usuario, correo o contraseña incorrectos."
 		h.renderLogin(w, r, http.StatusUnprocessableEntity, form)
 		return
@@ -122,35 +120,35 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		h.renderLogin(w, r, http.StatusInternalServerError, form)
 		return
 	}
-	redirect(w, r, "/")
+	httpx.Redirect(w, r, "/")
 }
 
-func (h *AuthHandler) renderLogin(w http.ResponseWriter, r *http.Request, status int, form pages.LoginForm) {
-	if isHTMX(r) {
-		render(w, r, status, pages.LoginFormFragment(form))
+func (h *Handler) renderLogin(w http.ResponseWriter, r *http.Request, status int, form LoginForm) {
+	if httpx.IsHTMX(r) {
+		httpx.Render(w, r, status, LoginFormFragment(form))
 		return
 	}
-	render(w, r, status, pages.LoginPage(form))
+	httpx.Render(w, r, status, LoginPage(form))
 }
 
 // ---------- Cerrar sesión ----------
 
 // POST /cerrar-sesion
-func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	if cookie, err := r.Cookie(middleware.SessionCookieName); err == nil && cookie.Value != "" {
+func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(SessionCookieName); err == nil && cookie.Value != "" {
 		if err := h.auth.EndSession(r.Context(), cookie.Value); err != nil {
 			slog.Error("cerrar sesión", "err", err)
 		}
 	}
-	middleware.ClearSessionCookie(w, h.secureCookies)
-	redirect(w, r, "/iniciar-sesion")
+	ClearSessionCookie(w, h.secureCookies)
+	httpx.Redirect(w, r, "/iniciar-sesion")
 }
 
-func (h *AuthHandler) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
+func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {
 	token, expires, err := h.auth.StartSession(r.Context(), userID)
 	if err != nil {
 		return err
 	}
-	middleware.SetSessionCookie(w, token, expires, h.secureCookies)
+	SetSessionCookie(w, token, expires, h.secureCookies)
 	return nil
 }

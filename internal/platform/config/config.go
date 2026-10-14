@@ -21,7 +21,7 @@ func (c Config) SecureCookies() bool {
 func Load() (Config, error) {
 	cfg := Config{
 		Port:        getEnv("PORT", "8080"),
-		DatabaseURL: getEnv("DATABASE_URL", "dd"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
 		Env:         getEnv("APP_ENV", "development"),
 	}
 	if cfg.DatabaseURL == "" {

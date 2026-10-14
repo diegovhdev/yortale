@@ -1,5 +1,4 @@
-// Package middleware contiene funciones que envuelven a los handlers HTTP.
-package middleware
+package auth
 
 import (
 	"context"
@@ -7,9 +6,6 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
-
-	"github.com/diegovhdev/yortale/internal/models"
-	"github.com/diegovhdev/yortale/internal/service"
 )
 
 const SessionCookieName = "yortale_session"
@@ -46,7 +42,7 @@ func ClearSessionCookie(w http.ResponseWriter, secure bool) {
 
 // LoadUser lee la cookie de sesión en cada petición y, si es válida,
 // guarda el usuario en el contexto para que los handlers lo usen.
-func LoadUser(auth *service.AuthService, secure bool) func(http.Handler) http.Handler {
+func LoadUser(auth *Service, secure bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			cookie, err := r.Cookie(SessionCookieName)
@@ -57,7 +53,7 @@ func LoadUser(auth *service.AuthService, secure bool) func(http.Handler) http.Ha
 
 			user, err := auth.UserFromSession(r.Context(), cookie.Value)
 			switch {
-			case errors.Is(err, service.ErrNoSession):
+			case errors.Is(err, ErrNoSession):
 				ClearSessionCookie(w, secure) // cookie vieja o falsa: la borramos
 			case err != nil:
 				slog.Error("cargar sesión", "err", err)
@@ -70,7 +66,7 @@ func LoadUser(auth *service.AuthService, secure bool) func(http.Handler) http.Ha
 }
 
 // CurrentUser devuelve el usuario con sesión iniciada, o nil si es un visitante.
-func CurrentUser(ctx context.Context) *models.User {
-	u, _ := ctx.Value(ctxKey{}).(*models.User)
+func CurrentUser(ctx context.Context) *User {
+	u, _ := ctx.Value(ctxKey{}).(*User)
 	return u
 }

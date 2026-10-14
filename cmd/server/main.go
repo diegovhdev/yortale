@@ -10,11 +10,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/diegovhdev/yortale/internal/config"
-	"github.com/diegovhdev/yortale/internal/database"
-	"github.com/diegovhdev/yortale/internal/repository"
+	"github.com/diegovhdev/yortale/internal/auth"
+	"github.com/diegovhdev/yortale/internal/platform/config"
+	"github.com/diegovhdev/yortale/internal/platform/database"
 	"github.com/diegovhdev/yortale/internal/server"
-	"github.com/diegovhdev/yortale/internal/service"
 	"github.com/joho/godotenv"
 )
 
@@ -45,15 +44,15 @@ func run() error {
 	defer pool.Close()
 
 	// Repositorios -> servicios -> router
-	users := repository.NewUserRepository(pool)
-	sessions := repository.NewSessionRepository(pool)
-	auth := service.NewAuthService(users, sessions)
+	users := auth.NewUserRepository(pool)
+	sessions := auth.NewSessionRepository(pool)
+	authService := auth.NewService(users, sessions)
 
-	go cleanupSessions(ctx, auth)
+	go cleanupSessions(ctx, authService)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           server.NewRouter(server.Deps{Auth: auth, SecureCookies: cfg.SecureCookies()}),
+		Handler:           server.NewRouter(server.Deps{Auth: authService, SecureCookies: cfg.SecureCookies()}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -83,7 +82,7 @@ func run() error {
 }
 
 // cleanupSessions borra cada hora las sesiones expiradas.
-func cleanupSessions(ctx context.Context, auth *service.AuthService) {
+func cleanupSessions(ctx context.Context, sessions *auth.Service) {
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
@@ -91,7 +90,7 @@ func cleanupSessions(ctx context.Context, auth *service.AuthService) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if n, err := auth.CleanupExpiredSessions(ctx); err != nil {
+			if n, err := sessions.CleanupExpiredSessions(ctx); err != nil {
 				slog.Error("limpiar sesiones", "err", err)
 			} else if n > 0 {
 				slog.Info("sesiones expiradas borradas", "cantidad", n)

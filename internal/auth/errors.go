@@ -1,5 +1,4 @@
-// Package repository contiene las consultas SQL. Es la única capa que habla con la base de datos.
-package repository
+package auth
 
 import (
 	"errors"
@@ -16,8 +15,7 @@ var (
 // uniqueViolation devuelve el nombre de la restricción UNIQUE violada, o "" si el error es otro.
 // 23505 es el código de PostgreSQL para "unique_violation".
 func uniqueViolation(err error) string {
-	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+	if pgErr, ok := errors.AsType[*pgconn.PgError](err); ok && pgErr.Code == "23505" {
 		return pgErr.ConstraintName
 	}
 	return ""

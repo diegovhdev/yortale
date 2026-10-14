@@ -1,5 +1,4 @@
-// Package models contiene las estructuras de datos compartidas entre capas.
-package models
+package auth
 
 import "time"
 

@@ -1,11 +1,11 @@
-// Package service contiene la lógica de negocio: validar, decidir y coordinar repositorios.
-package service
+// Package auth contiene todo lo relacionado con cuentas y sesiones: registro, inicio de sesión,
+// cookies, y las consultas SQL de las tablas users y sessions.
+package auth
 
 import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"encoding/base64"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,9 +14,6 @@ import (
 	"strings"
 	"time"
 	"unicode/utf8"
-
-	"github.com/diegovhdev/yortale/internal/models"
-	"github.com/diegovhdev/yortale/internal/repository"
 )
 
 // CurrentTermsVersion es la versión vigente de los términos de uso.
@@ -39,18 +36,18 @@ type ValidationErrors map[string]string
 func (v ValidationErrors) Error() string { return "datos de formulario inválidos" }
 
 type userStore interface {
-	Create(ctx context.Context, p repository.CreateUserParams) (models.User, error)
-	GetWithPasswordByLogin(ctx context.Context, login string) (models.User, string, error)
+	Create(ctx context.Context, p CreateUserParams) (User, error)
+	GetWithPasswordByLogin(ctx context.Context, login string) (User, string, error)
 }
 
 type sessionStore interface {
 	Create(ctx context.Context, tokenHash string, userID int64, expiresAt time.Time) error
-	GetUser(ctx context.Context, tokenHash string) (models.User, error)
+	GetUser(ctx context.Context, tokenHash string) (User, error)
 	Delete(ctx context.Context, tokenHash string) error
 	DeleteExpired(ctx context.Context) (int64, error)
 }
 
-type AuthService struct {
+type Service struct {
 	users    userStore
 	sessions sessionStore
 	// Hash de una contraseña falsa. Se usa cuando el usuario no existe para que
@@ -58,9 +55,8 @@ type AuthService struct {
 	dummyHash string
 }
 
-func NewAuthService(users userStore, sessions sessionStore) *AuthService {
-	dummy, _ := HashPassword("contraseña-que-nadie-usa")
-	return &AuthService{users: users, sessions: sessions, dummyHash: dummy}
+func NewService(users userStore, sessions sessionStore) *Service {
+	return &Service{users: users, sessions: sessions, dummyHash: HashPassword("contraseña-que-nadie-usa")}
 }
 
 type RegisterInput struct {
@@ -73,7 +69,7 @@ type RegisterInput struct {
 
 // Register valida los datos, crea el usuario y lo devuelve.
 // Si hay problemas con los datos devuelve ValidationErrors.
-func (s *AuthService) Register(ctx context.Context, in RegisterInput) (models.User, error) {
+func (s *Service) Register(ctx context.Context, in RegisterInput) (User, error) {
 	in.Username = strings.TrimSpace(in.Username)
 	in.Email = strings.ToLower(strings.TrimSpace(in.Email))
 
@@ -97,65 +93,56 @@ func (s *AuthService) Register(ctx context.Context, in RegisterInput) (models.Us
 		errs["accept_terms"] = "Debes aceptar los términos de uso."
 	}
 	if len(errs) > 0 {
-		return models.User{}, errs
+		return User{}, errs
 	}
 
-	hash, err := HashPassword(in.Password)
-	if err != nil {
-		return models.User{}, fmt.Errorf("hashear contraseña: %w", err)
-	}
-
-	user, err := s.users.Create(ctx, repository.CreateUserParams{
+	user, err := s.users.Create(ctx, CreateUserParams{
 		Username:     in.Username,
 		Email:        in.Email,
-		PasswordHash: hash,
+		PasswordHash: HashPassword(in.Password),
 		TermsVersion: CurrentTermsVersion,
 	})
 	switch {
-	case errors.Is(err, repository.ErrUsernameTaken):
-		return models.User{}, ValidationErrors{"username": "Ese nombre de usuario ya está en uso."}
-	case errors.Is(err, repository.ErrEmailTaken):
-		return models.User{}, ValidationErrors{"email": "Ya existe una cuenta con ese correo."}
+	case errors.Is(err, ErrUsernameTaken):
+		return User{}, ValidationErrors{"username": "Ese nombre de usuario ya está en uso."}
+	case errors.Is(err, ErrEmailTaken):
+		return User{}, ValidationErrors{"email": "Ya existe una cuenta con ese correo."}
 	case err != nil:
-		return models.User{}, err
+		return User{}, err
 	}
 	return user, nil
 }
 
 // Authenticate comprueba usuario/correo y contraseña.
 // Siempre devuelve el mismo error para no revelar si la cuenta existe.
-func (s *AuthService) Authenticate(ctx context.Context, login, password string) (models.User, error) {
+func (s *Service) Authenticate(ctx context.Context, login, password string) (User, error) {
 	login = strings.TrimSpace(login)
 	if login == "" || password == "" {
-		return models.User{}, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 
 	user, hash, err := s.users.GetWithPasswordByLogin(ctx, login)
-	if errors.Is(err, repository.ErrNotFound) {
+	if errors.Is(err, ErrNotFound) {
 		_, _ = VerifyPassword(password, s.dummyHash) // igualar el tiempo de respuesta
-		return models.User{}, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 	if err != nil {
-		return models.User{}, err
+		return User{}, err
 	}
 
 	ok, err := VerifyPassword(password, hash)
 	if err != nil {
-		return models.User{}, fmt.Errorf("verificar contraseña: %w", err)
+		return User{}, fmt.Errorf("verificar contraseña: %w", err)
 	}
 	if !ok {
-		return models.User{}, ErrInvalidCredentials
+		return User{}, ErrInvalidCredentials
 	}
 	return user, nil
 }
 
 // StartSession crea una sesión y devuelve el token que irá en la cookie.
-func (s *AuthService) StartSession(ctx context.Context, userID int64) (string, time.Time, error) {
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		return "", time.Time{}, err
-	}
-	token := base64.RawURLEncoding.EncodeToString(raw)
+func (s *Service) StartSession(ctx context.Context, userID int64) (string, time.Time, error) {
+	token := rand.Text() // al menos 128 bits aleatorios, en base32
 	expires := time.Now().Add(SessionTTL)
 
 	if err := s.sessions.Create(ctx, hashToken(token), userID, expires); err != nil {
@@ -165,19 +152,19 @@ func (s *AuthService) StartSession(ctx context.Context, userID int64) (string, t
 }
 
 // UserFromSession devuelve el usuario dueño del token, o ErrNoSession.
-func (s *AuthService) UserFromSession(ctx context.Context, token string) (models.User, error) {
+func (s *Service) UserFromSession(ctx context.Context, token string) (User, error) {
 	user, err := s.sessions.GetUser(ctx, hashToken(token))
-	if errors.Is(err, repository.ErrNotFound) {
-		return models.User{}, ErrNoSession
+	if errors.Is(err, ErrNotFound) {
+		return User{}, ErrNoSession
 	}
 	return user, err
 }
 
-func (s *AuthService) EndSession(ctx context.Context, token string) error {
+func (s *Service) EndSession(ctx context.Context, token string) error {
 	return s.sessions.Delete(ctx, hashToken(token))
 }
 
-func (s *AuthService) CleanupExpiredSessions(ctx context.Context) (int64, error) {
+func (s *Service) CleanupExpiredSessions(ctx context.Context) (int64, error) {
 	return s.sessions.DeleteExpired(ctx)
 }
 

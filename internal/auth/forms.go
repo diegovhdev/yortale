@@ -1,4 +1,4 @@
-package pages
+package auth
 
 // RegisterForm guarda lo que el usuario escribió y los errores, para volver a mostrar el formulario.
 // Las contraseñas nunca se devuelven al navegador.
