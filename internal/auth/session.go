@@ -5,7 +5,11 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
+
+	"github.com/diegovhdev/yortale/internal/platform/httpx"
 )
 
 const SessionCookieName = "yortale_session"
@@ -69,4 +73,33 @@ func LoadUser(auth *Service, secure bool) func(http.Handler) http.Handler {
 func CurrentUser(ctx context.Context) *User {
 	u, _ := ctx.Value(ctxKey{}).(*User)
 	return u
+}
+
+// RequireUser deja pasar solo a usuarios con sesión iniciada. A los visitantes los manda
+// al login; si pedían una página (GET), el login los devuelve a ella con ?next=.
+// Los handlers protegidos pueden dar por hecho que CurrentUser no es nil.
+func RequireUser(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if CurrentUser(r.Context()) == nil {
+			target := "/login"
+			if r.Method == http.MethodGet {
+				target += "?next=" + url.QueryEscape(r.URL.RequestURI())
+			}
+			httpx.Redirect(w, r, target)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// SafeNext devuelve next solo si es una ruta de este mismo sitio; si no, "/".
+// Evita que /login?next=https://otro-sitio.com sirva para redirigir a cualquier parte.
+func SafeNext(next string) string {
+	if !strings.HasPrefix(next, "/") || strings.HasPrefix(next, "//") || strings.HasPrefix(next, "/\\") {
+		return "/"
+	}
+	if u, err := url.Parse(next); err != nil || u.Host != "" || u.Scheme != "" {
+		return "/"
+	}
+	return next
 }

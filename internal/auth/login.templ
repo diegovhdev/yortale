@@ -23,6 +23,9 @@ templ LoginFormFragment(f LoginForm) {
 		if f.General != "" {
 			<p class="error" role="alert">{ f.General }</p>
 		}
+		if f.Next != "" && f.Next != "/" {
+			<input type="hidden" name="next" value={ f.Next }/>
+		}
 		@components.Field(components.FieldProps{
 			Label:        "Usuario o correo",
 			Name:         "login",

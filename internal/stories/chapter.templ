@@ -1,0 +1,100 @@
+package stories
+
+import "github.com/diegovhdev/yortale/web/components"
+
+templ ChapterPage(v ChapterView) {
+	@components.Layout(v.Chapter.Title + " · " + v.Story.Title) {
+		<article class="chapter">
+			<p><a href={ templ.URL(v.Story.URL()) }>{ v.Story.Title }</a>, por { v.Story.AuthorName }</p>
+			<h1>{ v.Chapter.Title }</h1>
+			if !v.Chapter.IsPublished {
+				<p class="notice">Este capítulo es un borrador: solo tú puedes verlo.</p>
+			}
+			if v.IsAuthor {
+				<p class="actions"><a href={ templ.URL(v.Chapter.EditURL()) }>Editar capítulo</a></p>
+			}
+			<div class="chapter-content">
+				for _, p := range v.Chapter.Paragraphs() {
+					<p>{ p }</p>
+				}
+			</div>
+			@chapterNav(v)
+		</article>
+	}
+}
+
+templ chapterNav(v ChapterView) {
+	<nav class="chapter-nav">
+		if v.Prev != nil {
+			<a href={ templ.URL(v.Prev.URL(v.Story)) } rel="prev">← { v.Prev.Title }</a>
+		}
+		<a href={ templ.URL(v.Story.URL()) }>Índice</a>
+		if v.Next != nil {
+			<a href={ templ.URL(v.Next.URL(v.Story)) } rel="next">{ v.Next.Title } →</a>
+		}
+	</nav>
+}
+
+templ ChapterFormPage(f ChapterForm) {
+	@components.Layout(chapterFormTitle(f)) {
+		<h1>{ chapterFormTitle(f) }</h1>
+		<p>Historia: <a href={ templ.URL(f.Story.URL()) }>{ f.Story.Title }</a></p>
+		@ChapterFormFragment(f)
+	}
+}
+
+templ ChapterFormFragment(f ChapterForm) {
+	<form
+		id="chapter-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Field(components.FieldProps{
+			Label:    "Título del capítulo",
+			Name:     "title",
+			Type:     "text",
+			Value:    f.Title,
+			Error:    f.Errors["title"],
+			Required: true,
+			Attrs:    templ.Attributes{"maxlength": "200"},
+		})
+		@components.TextArea(components.FieldProps{
+			Label:    "Texto",
+			Name:     "content",
+			Value:    f.Content,
+			Error:    f.Errors["content"],
+			Required: true,
+			Attrs:    templ.Attributes{"rows": "20"},
+		})
+		<small>Deja una línea en blanco entre párrafos.</small>
+		<div class="field">
+			<label>
+				<input type="checkbox" name="publish" checked?={ f.Publish }/>
+				Publicado (visible para los lectores)
+			</label>
+		</div>
+		<button type="submit">
+			if f.IsNew {
+				Guardar capítulo
+			} else {
+				Guardar cambios
+			}
+		</button>
+		<a href={ templ.URL(f.CancelURL) }>Cancelar</a>
+		<span class="htmx-indicator">Guardando…</span>
+	</form>
+}
+
+func chapterFormTitle(f ChapterForm) string {
+	if f.IsNew {
+		return "Nuevo capítulo"
+	}
+	return "Editar capítulo"
+}

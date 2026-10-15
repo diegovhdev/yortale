@@ -86,11 +86,12 @@ func (h *Handler) renderRegister(w http.ResponseWriter, r *http.Request, status 
 
 // GET /login
 func (h *Handler) ShowLogin(w http.ResponseWriter, r *http.Request) {
+	next := SafeNext(r.URL.Query().Get("next"))
 	if CurrentUser(r.Context()) != nil {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
+		http.Redirect(w, r, next, http.StatusSeeOther)
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, LoginPage(LoginForm{}))
+	httpx.Render(w, r, http.StatusOK, LoginPage(LoginForm{Next: next}))
 }
 
 // POST /login
@@ -99,7 +100,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Formulario inválido", http.StatusBadRequest)
 		return
 	}
-	form := LoginForm{Login: r.PostFormValue("login")}
+	form := LoginForm{Login: r.PostFormValue("login"), Next: SafeNext(r.PostFormValue("next"))}
 
 	user, err := h.auth.Authenticate(r.Context(), form.Login, r.PostFormValue("password"))
 	switch {
@@ -120,7 +121,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 		h.renderLogin(w, r, http.StatusInternalServerError, form)
 		return
 	}
-	httpx.Redirect(w, r, "/")
+	httpx.Redirect(w, r, form.Next)
 }
 
 func (h *Handler) renderLogin(w http.ResponseWriter, r *http.Request, status int, form LoginForm) {

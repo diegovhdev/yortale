@@ -1,0 +1,86 @@
+package stories
+
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+templ ExplorePage(v ExploreView) {
+	@components.Layout("Explorar historias") {
+		<h1>Explorar historias</h1>
+		<form class="search" action="/stories" method="get" role="search">
+			<div class="field">
+				<label for="q">Buscar</label>
+				<input type="search" id="q" name="q" value={ v.Query } maxlength="200" placeholder="Título o palabras de la sinopsis"/>
+			</div>
+			@components.Select(components.SelectProps{
+				Label:   "Género",
+				Name:    "genre",
+				Value:   v.GenreID,
+				Options: genreOptions(v.Genres, "Todos"),
+			})
+			<button type="submit">Buscar</button>
+		</form>
+		if len(v.Stories) == 0 {
+			if v.Query != "" || v.GenreID != "" {
+				<p>No encontramos historias con esa búsqueda.</p>
+			} else {
+				<p>Todavía no hay historias publicadas. <a href="/stories/new">¡Escribe la primera!</a></p>
+			}
+		} else {
+			<ul class="story-list">
+				for _, s := range v.Stories {
+					@storyCard(s, false)
+				}
+			</ul>
+		}
+		if v.Page > 1 || v.HasNext {
+			<nav class="pagination">
+				if v.Page > 1 {
+					<a href={ templ.URL(v.PageURL(v.Page - 1)) } rel="prev">← Anterior</a>
+				}
+				<span>Página { strconv.Itoa(v.Page) }</span>
+				if v.HasNext {
+					<a href={ templ.URL(v.PageURL(v.Page + 1)) } rel="next">Siguiente →</a>
+				}
+			</nav>
+		}
+	}
+}
+
+templ MyStoriesPage(stories []Story) {
+	@components.Layout("Mis historias") {
+		<h1>Mis historias</h1>
+		<p><a href="/stories/new">Nueva historia</a></p>
+		if len(stories) == 0 {
+			<p>Aún no has escrito ninguna historia.</p>
+		} else {
+			<ul class="story-list">
+				for _, s := range stories {
+					@storyCard(s, true)
+				}
+			</ul>
+		}
+	}
+}
+
+// storyCard es una historia dentro de un listado. forAuthor añade el enlace de edición.
+templ storyCard(s Story, forAuthor bool) {
+	<li class="story-card">
+		<h2><a href={ templ.URL(s.URL()) }>{ s.Title }</a></h2>
+		if !forAuthor {
+			<p>por { s.AuthorName }</p>
+		}
+		@storyMeta(s)
+		if s.Synopsis != "" {
+			<p>{ excerpt(s.Synopsis, 300) }</p>
+		}
+		if forAuthor {
+			<p class="actions">
+				<a href={ templ.URL(s.NewChapterURL()) }>Nuevo capítulo</a>
+				<a href={ templ.URL(s.EditURL()) }>Editar</a>
+			</p>
+		}
+	</li>
+}

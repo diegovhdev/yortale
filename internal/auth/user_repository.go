@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/diegovhdev/yortale/internal/platform/database"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -43,7 +44,7 @@ func (r *UserRepository) Create(ctx context.Context, p CreateUserParams) (User, 
 
 	user, err := scanUser(r.db.QueryRow(ctx, q, p.Username, p.Email, p.PasswordHash, p.TermsVersion))
 	if err != nil {
-		switch uniqueViolation(err) {
+		switch database.UniqueViolation(err) {
 		case "users_username_key":
 			return User{}, ErrUsernameTaken
 		case "users_email_key":

@@ -1,7 +1,7 @@
 /* Estilos mínimos, solo para que los formularios sean legibles. */
 body {
   font-family: system-ui, sans-serif;
-  max-width: 28rem;
+  max-width: 42rem;
   margin: 2rem auto;
   padding: 0 1rem;
   line-height: 1.5;
@@ -15,7 +15,10 @@ body {
 
 .field input[type="text"],
 .field input[type="email"],
-.field input[type="password"] {
+.field input[type="password"],
+.field input[type="search"],
+.field textarea,
+.field select {
   padding: 0.4rem;
   font-size: 1rem;
 }
@@ -31,4 +34,75 @@ body {
 footer {
   margin-top: 3rem;
   font-size: 0.875rem;
+}
+
+header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+nav a + a,
+.actions > * + * {
+  margin-left: 0.75rem;
+}
+
+.actions form {
+  display: inline;
+}
+
+.field textarea {
+  font-family: inherit;
+  line-height: 1.5;
+}
+
+.meta {
+  color: #555;
+  font-size: 0.875rem;
+}
+
+.notice {
+  padding: 0.5rem 0.75rem;
+  background: #fff6e0;
+}
+
+.story-list {
+  list-style: none;
+  padding: 0;
+}
+
+.story-card {
+  border-bottom: 1px solid #ddd;
+  padding: 0.5rem 0;
+}
+
+.story-card h2 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.chapter-list li {
+  margin-bottom: 0.25rem;
+}
+
+/* Texto de los capítulos: cada párrafo en su <p>, y los saltos de línea sueltos se respetan. */
+.chapter-content {
+  font-family: Georgia, serif;
+  font-size: 1.125rem;
+  line-height: 1.7;
+}
+
+.chapter-content p,
+.synopsis p {
+  white-space: pre-line;
+}
+
+.chapter-nav,
+.pagination {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 2rem;
 }

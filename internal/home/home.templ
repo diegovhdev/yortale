@@ -11,6 +11,7 @@ templ HomePage(user *auth.User) {
 		if user != nil {
 			<h1>Hola, { user.Name() }</h1>
 			<p>Iniciaste sesión como <strong>{ user.Username }</strong> ({ user.Email }).</p>
+			<p><a href="/stories">Explora historias</a> o <a href="/my/stories">sigue escribiendo las tuyas</a>.</p>
 			<form action="/logout" method="post">
 				<button type="submit">Cerrar sesión</button>
 			</form>
@@ -19,6 +20,7 @@ templ HomePage(user *auth.User) {
 			<p>
 				<a href="/login">Inicia sesión</a> o <a href="/register">crea una cuenta</a>.
 			</p>
+			<p><a href="/stories">Explora las historias publicadas</a>.</p>
 		}
 	}
 }

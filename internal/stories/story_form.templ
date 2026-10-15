@@ -1,0 +1,93 @@
+package stories
+
+import "github.com/diegovhdev/yortale/web/components"
+
+templ NewStoryPage(f StoryForm) {
+	@components.Layout("Nueva historia") {
+		<h1>Nueva historia</h1>
+		<p>La historia empieza como borrador: nadie más la verá hasta que publiques su primer capítulo.</p>
+		@StoryFormFragment(f)
+	}
+}
+
+templ EditStoryPage(f StoryForm) {
+	@components.Layout("Editar historia") {
+		<h1>Editar historia</h1>
+		@StoryFormFragment(f)
+	}
+}
+
+// StoryFormFragment sirve para crear y para editar; f.Action indica a dónde se envía.
+templ StoryFormFragment(f StoryForm) {
+	<form
+		id="story-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Field(components.FieldProps{
+			Label:    "Título",
+			Name:     "title",
+			Type:     "text",
+			Value:    f.Title,
+			Error:    f.Errors["title"],
+			Required: true,
+			Attrs:    templ.Attributes{"maxlength": "200"},
+		})
+		@components.TextArea(components.FieldProps{
+			Label: "Sinopsis",
+			Name:  "synopsis",
+			Value: f.Synopsis,
+			Error: f.Errors["synopsis"],
+			Attrs: templ.Attributes{"rows": "6", "maxlength": "4000"},
+		})
+		@components.Select(components.SelectProps{
+			Label:   "Género",
+			Name:    "genre_id",
+			Value:   f.GenreID,
+			Error:   f.Errors["genre_id"],
+			Options: genreOptions(f.Genres, "Sin género"),
+		})
+		@components.Select(components.SelectProps{
+			Label:    "Idioma",
+			Name:     "language",
+			Value:    f.Language,
+			Error:    f.Errors["language"],
+			Options:  Languages,
+			Required: true,
+		})
+		@components.Select(components.SelectProps{
+			Label:    "Clasificación",
+			Name:     "content_rating",
+			Value:    f.ContentRating,
+			Error:    f.Errors["content_rating"],
+			Options:  ContentRatings,
+			Required: true,
+		})
+		if !f.IsNew {
+			@components.Select(components.SelectProps{
+				Label:    "Estado",
+				Name:     "status",
+				Value:    f.Status,
+				Error:    f.Errors["status"],
+				Options:  Statuses,
+				Required: true,
+			})
+		}
+		<button type="submit">
+			if f.IsNew {
+				Crear historia
+			} else {
+				Guardar cambios
+			}
+		</button>
+		<a href={ templ.URL(f.CancelURL) }>Cancelar</a>
+		<span class="htmx-indicator">Guardando…</span>
+	</form>
+}

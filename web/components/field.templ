@@ -33,3 +33,61 @@ templ Field(p FieldProps) {
 		}
 	</div>
 }
+
+// TextArea es como Field pero con un <textarea>. Usa Attrs para rows, maxlength, etc.
+templ TextArea(p FieldProps) {
+	<div class="field">
+		<label for={ p.Name }>{ p.Label }</label>
+		<textarea
+			id={ p.Name }
+			name={ p.Name }
+			required?={ p.Required }
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+			{ p.Attrs... }
+		>{ p.Value }</textarea>
+		if p.Error != "" {
+			<small id={ p.Name + "-error" } class="error">{ p.Error }</small>
+		}
+	</div>
+}
+
+// Option es una opción de un <select>.
+type Option struct {
+	Value string
+	Label string
+}
+
+type SelectProps struct {
+	Label    string
+	Name     string
+	Value    string // valor de la opción seleccionada
+	Error    string
+	Options  []Option
+	Required bool
+}
+
+// Select es un campo <select> con su etiqueta y su mensaje de error.
+templ Select(p SelectProps) {
+	<div class="field">
+		<label for={ p.Name }>{ p.Label }</label>
+		<select
+			id={ p.Name }
+			name={ p.Name }
+			required?={ p.Required }
+			if p.Error != "" {
+				aria-invalid="true"
+				aria-describedby={ p.Name + "-error" }
+			}
+		>
+			for _, o := range p.Options {
+				<option value={ o.Value } selected?={ o.Value == p.Value }>{ o.Label }</option>
+			}
+		</select>
+		if p.Error != "" {
+			<small id={ p.Name + "-error" } class="error">{ p.Error }</small>
+		}
+	</div>
+}

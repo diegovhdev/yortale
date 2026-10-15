@@ -14,6 +14,7 @@ import (
 	"github.com/diegovhdev/yortale/internal/platform/config"
 	"github.com/diegovhdev/yortale/internal/platform/database"
 	"github.com/diegovhdev/yortale/internal/server"
+	"github.com/diegovhdev/yortale/internal/stories"
 	"github.com/joho/godotenv"
 )
 
@@ -47,12 +48,17 @@ func run() error {
 	users := auth.NewUserRepository(pool)
 	sessions := auth.NewSessionRepository(pool)
 	authService := auth.NewService(users, sessions)
+	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool))
 
 	go cleanupSessions(ctx, authService)
 
 	srv := &http.Server{
-		Addr:              ":" + cfg.Port,
-		Handler:           server.NewRouter(server.Deps{Auth: authService, SecureCookies: cfg.SecureCookies()}),
+		Addr: ":" + cfg.Port,
+		Handler: server.NewRouter(server.Deps{
+			Auth:          authService,
+			Stories:       storyService,
+			SecureCookies: cfg.SecureCookies(),
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,

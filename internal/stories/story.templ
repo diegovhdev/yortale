@@ -1,0 +1,95 @@
+package stories
+
+import "github.com/diegovhdev/yortale/web/components"
+
+templ StoryPage(v StoryView) {
+	@components.Layout(v.Story.Title) {
+		<article class="story">
+			<h1>{ v.Story.Title }</h1>
+			<p>por <strong>{ v.Story.AuthorName }</strong></p>
+			@storyMeta(v.Story)
+			if v.Story.IsDraft() {
+				<p class="notice">Esta historia es un borrador: solo tú puedes verla. Se publica al publicar su primer capítulo.</p>
+			}
+			if v.Story.Synopsis != "" {
+				<div class="synopsis">
+					for _, p := range paragraphs(v.Story.Synopsis) {
+						<p>{ p }</p>
+					}
+				</div>
+			}
+			if v.IsAuthor {
+				<p class="actions">
+					<a href={ templ.URL(v.Story.NewChapterURL()) }>Nuevo capítulo</a>
+					<a href={ templ.URL(v.Story.EditURL()) }>Editar historia</a>
+					<a href={ templ.URL(v.Story.DeleteURL()) }>Borrar historia</a>
+				</p>
+			}
+			<h2>Capítulos</h2>
+			if len(v.Chapters) == 0 {
+				<p>Todavía no hay capítulos publicados.</p>
+			} else {
+				<ol class="chapter-list">
+					for i, c := range v.Chapters {
+						<li>
+							<a href={ templ.URL(c.URL(v.Story)) }>{ c.Title }</a>
+							if !c.IsPublished {
+								<small>(borrador)</small>
+							}
+							if v.IsAuthor {
+								@chapterActions(c, i == 0, i == len(v.Chapters)-1)
+							}
+						</li>
+					}
+				</ol>
+			}
+		</article>
+	}
+}
+
+// chapterActions son los controles del autor en el índice. Mover usa formularios POST
+// normales: cambian datos, así que no pueden ser enlaces GET.
+templ chapterActions(c Chapter, first, last bool) {
+	<span class="actions">
+		<a href={ templ.URL(c.EditURL()) }>Editar</a>
+		<a href={ templ.URL(c.DeleteURL()) }>Borrar</a>
+		if !first {
+			<form method="post" action={ templ.URL(c.MoveURL()) }>
+				<input type="hidden" name="direction" value="up"/>
+				<button type="submit" aria-label={ "Subir " + c.Title } title="Subir">↑</button>
+			</form>
+		}
+		if !last {
+			<form method="post" action={ templ.URL(c.MoveURL()) }>
+				<input type="hidden" name="direction" value="down"/>
+				<button type="submit" aria-label={ "Bajar " + c.Title } title="Bajar">↓</button>
+			</form>
+		}
+	</span>
+}
+
+templ storyMeta(s Story) {
+	<p class="meta">
+		if s.GenreLabel() != "" {
+			{ s.GenreLabel() } ·
+		}
+		{ s.ContentRatingLabel() } · { s.StatusLabel() } · { s.LanguageLabel() } ·
+		{ plural(int64(s.ChapterCount), "capítulo", "capítulos") } ·
+		{ plural(s.ReadsCount, "lector", "lectores") }
+		if s.LastChapterAt != nil {
+			· actualizada el { formatDate(*s.LastChapterAt) }
+		}
+	</p>
+}
+
+templ ConfirmDeletePage(c ConfirmDelete) {
+	@components.Layout(c.Title) {
+		<h1>{ c.Title }</h1>
+		<p>{ c.Message }</p>
+		<form method="post" action={ templ.URL(c.Action) }>
+			<button type="submit">Sí, borrar</button>
+			<a href={ templ.URL(c.CancelURL) }>Cancelar</a>
+		</form>
+	}
+}
+

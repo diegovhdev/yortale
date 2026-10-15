@@ -1,0 +1,145 @@
+// Package stories contiene las historias y sus capítulos: escribir, publicar, explorar y leer.
+package stories
+
+import (
+	"fmt"
+	"net/url"
+	"strings"
+	"time"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// Story es una historia tal como la muestra la aplicación, con los datos del autor y del género ya unidos.
+type Story struct {
+	ID             int64
+	AuthorID       int64
+	AuthorUsername string
+	AuthorName     string // display_name, o el username si no tiene
+	GenreID        *int16
+	GenreName      *string
+	Title          string
+	Slug           string
+	Synopsis       string
+	Language       string
+	ContentRating  string
+	Status         string
+	PublishedAt    *time.Time // primera vez que dejó de ser borrador
+	LastChapterAt  *time.Time
+	ReadsCount     int64
+	ChapterCount   int // solo capítulos publicados
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+}
+
+type Genre struct {
+	ID   int16
+	Name string
+	Slug string
+}
+
+const StatusDraft = "draft"
+
+// Las listas siguientes deben coincidir con los CHECK de stories.status y stories.content_rating.
+var (
+	Statuses = []components.Option{
+		{Value: StatusDraft, Label: "Borrador (solo tú la ves)"},
+		{Value: "ongoing", Label: "En curso"},
+		{Value: "completed", Label: "Completada"},
+		{Value: "hiatus", Label: "En pausa"},
+	}
+	ContentRatings = []components.Option{
+		{Value: "general", Label: "Para todo público"},
+		{Value: "teen", Label: "Adolescentes (13+)"},
+		{Value: "mature", Label: "Adultos (18+)"},
+	}
+	// La columna language no tiene CHECK; esta lista es la única validación.
+	Languages = []components.Option{
+		{Value: "es", Label: "Español"},
+		{Value: "en", Label: "English"},
+		{Value: "pt", Label: "Português"},
+		{Value: "fr", Label: "Français"},
+		{Value: "it", Label: "Italiano"},
+		{Value: "de", Label: "Deutsch"},
+	}
+)
+
+// URL es la dirección canónica: /stories/{id}/{slug}. Solo el id se usa para buscar.
+func (s Story) URL() string {
+	return fmt.Sprintf("/stories/%d/%s", s.ID, url.PathEscape(s.Slug))
+}
+
+func (s Story) EditURL() string       { return fmt.Sprintf("/stories/%d/edit", s.ID) }
+func (s Story) DeleteURL() string     { return fmt.Sprintf("/stories/%d/delete", s.ID) }
+func (s Story) NewChapterURL() string { return fmt.Sprintf("/stories/%d/chapters/new", s.ID) }
+func (s Story) ChaptersURL() string   { return fmt.Sprintf("/stories/%d/chapters", s.ID) }
+
+func (s Story) IsDraft() bool { return s.Status == StatusDraft }
+
+func (s Story) StatusLabel() string        { return optionLabel(Statuses, s.Status) }
+func (s Story) ContentRatingLabel() string { return optionLabel(ContentRatings, s.ContentRating) }
+func (s Story) LanguageLabel() string      { return optionLabel(Languages, s.Language) }
+
+func (s Story) GenreLabel() string {
+	if s.GenreName == nil {
+		return ""
+	}
+	return *s.GenreName
+}
+
+func optionLabel(opts []components.Option, value string) string {
+	for _, o := range opts {
+		if o.Value == value {
+			return o.Label
+		}
+	}
+	return value
+}
+
+func validOption(opts []components.Option, value string) bool {
+	for _, o := range opts {
+		if o.Value == value {
+			return true
+		}
+	}
+	return false
+}
+
+// genreOptions convierte los géneros en opciones de <select>; emptyLabel es la opción sin género.
+func genreOptions(genres []Genre, emptyLabel string) []components.Option {
+	opts := make([]components.Option, 0, len(genres)+1)
+	opts = append(opts, components.Option{Value: "", Label: emptyLabel})
+	for _, g := range genres {
+		opts = append(opts, components.Option{Value: fmt.Sprint(g.ID), Label: g.Name})
+	}
+	return opts
+}
+
+var months = [...]string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
+	"agosto", "septiembre", "octubre", "noviembre", "diciembre"}
+
+// formatDate escribe una fecha como "2 de octubre de 2026".
+func formatDate(t time.Time) string {
+	return fmt.Sprintf("%d de %s de %d", t.Day(), months[t.Month()-1], t.Year())
+}
+
+// plural escribe "1 capítulo" o "3 capítulos".
+func plural(n int64, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return fmt.Sprintf("%d %s", n, many)
+}
+
+// excerpt recorta un texto a n caracteres como mucho, sin cortar palabras a la mitad.
+func excerpt(text string, n int) string {
+	runes := []rune(text)
+	if len(runes) <= n {
+		return text
+	}
+	cut := string(runes[:n])
+	if i := strings.LastIndexAny(cut, " \n"); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,.;:\n") + "…"
+}

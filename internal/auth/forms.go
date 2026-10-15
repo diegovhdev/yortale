@@ -12,5 +12,6 @@ type RegisterForm struct {
 
 type LoginForm struct {
 	Login   string
+	Next    string // ruta a la que volver tras iniciar sesión; siempre pasa por SafeNext
 	General string
 }
