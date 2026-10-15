@@ -27,3 +27,8 @@ body {
 [aria-invalid="true"] {
   border-color: #b00020;
 }
+
+footer {
+  margin-top: 3rem;
+  font-size: 0.875rem;
+}

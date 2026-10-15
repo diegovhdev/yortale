@@ -6,16 +6,16 @@ templ LoginPage(f LoginForm) {
 	@components.Layout("Iniciar sesión") {
 		<h1>Iniciar sesión</h1>
 		@LoginFormFragment(f)
-		<p>¿No tienes cuenta? <a href="/registro">Regístrate</a></p>
+		<p>¿No tienes cuenta? <a href="/register">Regístrate</a></p>
 	}
 }
 
 templ LoginFormFragment(f LoginForm) {
 	<form
 		id="login-form"
-		action="/iniciar-sesion"
+		action="/login"
 		method="post"
-		hx-post="/iniciar-sesion"
+		hx-post="/login"
 		hx-target="this"
 		hx-swap="outerHTML"
 		hx-disable="find button"

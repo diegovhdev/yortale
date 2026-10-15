@@ -51,7 +51,7 @@ func RegisterPage(f RegisterForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " <p>¿Ya tienes cuenta? <a href=\"/iniciar-sesion\">Inicia sesión</a></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " <p>¿Ya tienes cuenta? <a href=\"/login\">Inicia sesión</a></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -89,7 +89,7 @@ func RegisterFormFragment(f RegisterForm) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form id=\"register-form\" action=\"/registro\" method=\"post\" hx-post=\"/registro\" hx-target=\"this\" hx-swap=\"outerHTML\" hx-disable=\"find button\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form id=\"register-form\" action=\"/register\" method=\"post\" hx-post=\"/register\" hx-target=\"this\" hx-swap=\"outerHTML\" hx-disable=\"find button\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -176,7 +176,7 @@ func RegisterFormFragment(f RegisterForm) templ.Component {
 				return templ_7745c5c3_Err
 			}
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "> Acepto los <a href=\"/terminos\" target=\"_blank\">términos de uso</a></label> ")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "> Acepto los <a href=\"/terms\" target=\"_blank\">términos de uso</a> y la <a href=\"/privacy\" target=\"_blank\">política de privacidad</a></label> ")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -188,7 +188,7 @@ func RegisterFormFragment(f RegisterForm) templ.Component {
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(f.Errors["accept_terms"])
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/auth/register.templ`, Line: 80, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/auth/register.templ`, Line: 81, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {

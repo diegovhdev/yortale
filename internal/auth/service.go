@@ -90,7 +90,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (User, error) 
 		errs["password_confirm"] = "Las contraseñas no coinciden."
 	}
 	if !in.AcceptTerms {
-		errs["accept_terms"] = "Debes aceptar los términos de uso."
+		errs["accept_terms"] = "Debes aceptar los términos de uso y la política de privacidad."
 	}
 	if len(errs) > 0 {
 		return User{}, errs

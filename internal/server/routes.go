@@ -7,6 +7,7 @@ import (
 
 	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/home"
+	"github.com/diegovhdev/yortale/internal/legal"
 	"github.com/diegovhdev/yortale/internal/platform/middleware"
 	"github.com/diegovhdev/yortale/web"
 )
@@ -26,11 +27,14 @@ func NewRouter(d Deps) http.Handler {
 
 	mux.HandleFunc("GET /{$}", home.Home)
 
-	mux.HandleFunc("GET /registro", authHandler.ShowRegister)
-	mux.HandleFunc("POST /registro", authHandler.Register)
-	mux.HandleFunc("GET /iniciar-sesion", authHandler.ShowLogin)
-	mux.HandleFunc("POST /iniciar-sesion", authHandler.Login)
-	mux.HandleFunc("POST /cerrar-sesion", authHandler.Logout)
+	mux.HandleFunc("GET /register", authHandler.ShowRegister)
+	mux.HandleFunc("POST /register", authHandler.Register)
+	mux.HandleFunc("GET /login", authHandler.ShowLogin)
+	mux.HandleFunc("POST /login", authHandler.Login)
+	mux.HandleFunc("POST /logout", authHandler.Logout)
+
+	mux.HandleFunc("GET /terms", legal.Terms)
+	mux.HandleFunc("GET /privacy", legal.Privacy)
 
 	// Protección CSRF de la librería estándar: rechaza POST/PUT/PATCH/DELETE de otros sitios
 	// según Sec-Fetch-Site u Origin. Junto con SameSite=Lax en la cookie, evita usar tokens.

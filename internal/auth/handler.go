@@ -21,7 +21,7 @@ const genericError = "Algo salió mal. Inténtalo de nuevo en un momento."
 
 // ---------- Registro ----------
 
-// GET /registro
+// GET /register
 func (h *Handler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 	if CurrentUser(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -30,7 +30,7 @@ func (h *Handler) ShowRegister(w http.ResponseWriter, r *http.Request) {
 	httpx.Render(w, r, http.StatusOK, RegisterPage(RegisterForm{}))
 }
 
-// POST /registro
+// POST /register
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Formulario inválido", http.StatusBadRequest)
@@ -67,7 +67,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	// Cuenta creada: se inicia sesión de inmediato.
 	if err := h.startSession(w, r, user.ID); err != nil {
 		slog.Error("iniciar sesión tras registro", "err", err)
-		httpx.Redirect(w, r, "/iniciar-sesion")
+		httpx.Redirect(w, r, "/login")
 		return
 	}
 	httpx.Redirect(w, r, "/")
@@ -84,7 +84,7 @@ func (h *Handler) renderRegister(w http.ResponseWriter, r *http.Request, status 
 
 // ---------- Inicio de sesión ----------
 
-// GET /iniciar-sesion
+// GET /login
 func (h *Handler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	if CurrentUser(r.Context()) != nil {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -93,7 +93,7 @@ func (h *Handler) ShowLogin(w http.ResponseWriter, r *http.Request) {
 	httpx.Render(w, r, http.StatusOK, LoginPage(LoginForm{}))
 }
 
-// POST /iniciar-sesion
+// POST /login
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "Formulario inválido", http.StatusBadRequest)
@@ -133,7 +133,7 @@ func (h *Handler) renderLogin(w http.ResponseWriter, r *http.Request, status int
 
 // ---------- Cerrar sesión ----------
 
-// POST /cerrar-sesion
+// POST /logout
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	if cookie, err := r.Cookie(SessionCookieName); err == nil && cookie.Value != "" {
 		if err := h.auth.EndSession(r.Context(), cookie.Value); err != nil {
@@ -141,7 +141,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	ClearSessionCookie(w, h.secureCookies)
-	httpx.Redirect(w, r, "/iniciar-sesion")
+	httpx.Redirect(w, r, "/login")
 }
 
 func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, userID int64) error {

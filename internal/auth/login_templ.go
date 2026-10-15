@@ -51,7 +51,7 @@ func LoginPage(f LoginForm) templ.Component {
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " <p>¿No tienes cuenta? <a href=\"/registro\">Regístrate</a></p>")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, " <p>¿No tienes cuenta? <a href=\"/register\">Regístrate</a></p>")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -86,7 +86,7 @@ func LoginFormFragment(f LoginForm) templ.Component {
 			templ_7745c5c3_Var3 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form id=\"login-form\" action=\"/iniciar-sesion\" method=\"post\" hx-post=\"/iniciar-sesion\" hx-target=\"this\" hx-swap=\"outerHTML\" hx-disable=\"find button\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<form id=\"login-form\" action=\"/login\" method=\"post\" hx-post=\"/login\" hx-target=\"this\" hx-swap=\"outerHTML\" hx-disable=\"find button\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

@@ -1,0 +1,148 @@
+package legal
+
+import (
+	"github.com/diegovhdev/yortale/internal/auth"
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// contactLink es el enlace al correo de contacto que usan las dos páginas.
+templ contactLink() {
+	<a href={ templ.URL("mailto:" + contactEmail) }>{ contactEmail }</a>
+}
+
+templ TermsPage() {
+	@components.Layout("Términos de uso") {
+		<article class="legal">
+			<h1>Términos de uso</h1>
+			<p><small>Versión { auth.CurrentTermsVersion }, vigente desde el { effectiveDate }.</small></p>
+			<p>
+				YorTale es una plataforma para leer y publicar historias (novelas, relatos y fanfics),
+				operada por { operatorName } desde Colombia. Estos términos regulan el uso del sitio.
+				Léelos junto con nuestra <a href="/privacy">política de privacidad</a>.
+			</p>
+			<h2>1. Aceptación</h2>
+			<p>
+				Al crear una cuenta o usar YorTale aceptas estos términos. Si no estás de acuerdo con ellos,
+				no uses el servicio.
+			</p>
+			<h2>2. Quién puede usar YorTale</h2>
+			<ul>
+				<li>Debes tener al menos <strong>13 años</strong>.</li>
+				<li>
+					Si eres menor de 18 años, necesitas la autorización de tu padre, madre o tutor legal para
+					registrarte, y declaras tenerla al crear la cuenta.
+				</li>
+				<li>Si la ley de tu país exige una edad mayor para usar servicios como este, debes cumplirla.</li>
+			</ul>
+			<h2>3. Tu cuenta</h2>
+			<ul>
+				<li>Debes dar datos verdaderos y mantener tu contraseña en secreto.</li>
+				<li>Eres responsable de lo que se haga con tu cuenta.</li>
+				<li>No puedes hacerte pasar por otra persona ni crear cuentas para eludir una suspensión.</li>
+			</ul>
+			<h2>4. Tu contenido y tus derechos</h2>
+			<ul>
+				<li>
+					<strong>Tus historias son tuyas.</strong> Conservas todos los derechos de autor sobre lo que
+					publicas.
+				</li>
+				<li>
+					Al publicar, concedes a YorTale una licencia no exclusiva, gratuita y mundial para alojar,
+					reproducir y mostrar tu contenido dentro de la plataforma, con el único fin de prestar el
+					servicio. La licencia termina cuando eliminas el contenido, salvo copias técnicas
+					temporales que se borren en un plazo razonable.
+				</li>
+				<li>
+					Garantizas que tienes derecho a publicar lo que subes. No puedes publicar obras ajenas
+					como propias (plagio) ni copiar obras protegidas sin permiso.
+				</li>
+				<li>
+					<strong>Fanfics:</strong> se permiten obras derivadas sin ánimo de lucro. Los personajes y
+					universos originales pertenecen a sus autores, y YorTale no reclama ningún derecho sobre
+					ellos. Si el titular de una obra original lo pide, podremos retirar el contenido derivado.
+				</li>
+			</ul>
+			<h2>5. Clasificación del contenido</h2>
+			<p>Cada historia debe llevar la clasificación que le corresponde:</p>
+			<ul>
+				<li><strong>General:</strong> apta para todos los públicos.</li>
+				<li><strong>Adolescente:</strong> temas o lenguaje para mayores de 13 años.</li>
+				<li>
+					<strong>Adultos (+18):</strong> contenido sexual explícito, violencia gráfica u otros temas
+					solo para mayores de edad. Solo se muestra a usuarios que hayan declarado ser mayores de 18
+					años.
+				</li>
+			</ul>
+			<p>
+				Clasificar mal una historia de forma intencionada es una infracción. Podemos cambiar la
+				clasificación de cualquier historia que no la tenga correcta.
+			</p>
+			<h2>6. Contenido y conductas prohibidas</h2>
+			<p>No puedes publicar ni hacer en YorTale:</p>
+			<ul>
+				<li>
+					<strong>Contenido sexual que involucre a menores de edad, aunque sea ficción.</strong>
+					Se elimina de inmediato, la cuenta se cierra y, cuando la ley lo exija, se informa a las
+					autoridades.
+				</li>
+				<li>Acoso, amenazas, intimidación o incitación a hacer daño a otras personas.</li>
+				<li>Discurso de odio contra personas o grupos por su origen, religión, género, orientación sexual, discapacidad u otra condición similar.</li>
+				<li>Publicar datos personales de otras personas sin su permiso.</li>
+				<li>Spam, publicidad no solicitada o enlaces maliciosos.</li>
+				<li>Contenido ilegal o que incite a cometer delitos.</li>
+				<li>Intentar acceder a cuentas ajenas, sobrecargar el servicio o extraer datos de forma automatizada.</li>
+			</ul>
+			<p>
+				Las historias pueden tratar temas difíciles; la ficción no está prohibida por incomodar. Lo que
+				está prohibido es usarla para dañar a personas reales o para los fines de esta lista.
+			</p>
+			<h2>7. Denuncias y derechos de autor</h2>
+			<p>
+				Puedes denunciar historias, capítulos o comentarios que incumplan estos términos con la
+				opción de denunciar de cada uno.
+			</p>
+			<p>
+				Si crees que alguien publicó una obra tuya sin permiso, escribe a{ " " }
+				@contactLink()
+				{ " " }indicando:
+				tu nombre y datos de contacto, la obra original, el enlace al contenido infractor y una
+				declaración de que eres el titular de los derechos o actúas en su nombre. Retiraremos el
+				contenido si la reclamación es válida, y el autor podrá responder si cree que hubo un error.
+			</p>
+			<h2>8. Moderación y suspensión</h2>
+			<p>
+				Podemos ocultar o eliminar contenido y suspender o cerrar cuentas que incumplan estos
+				términos. Según la gravedad, avisaremos antes con una advertencia o actuaremos de inmediato.
+				Si crees que nos equivocamos, puedes escribirnos.
+			</p>
+			<h2>9. Eliminar tu cuenta</h2>
+			<p>
+				Puedes eliminar tu cuenta cuando quieras. Se borran tus historias, capítulos, listas y demás
+				datos. Tus comentarios en historias ajenas se conservan de forma anónima para no romper las
+				conversaciones, salvo que pidas expresamente que se borren.
+			</p>
+			<h2>10. Sin garantías y limitación de responsabilidad</h2>
+			<p>
+				YorTale se ofrece "tal cual", sin garantía de que esté siempre disponible o libre de errores.
+				El contenido lo publican los usuarios y las opiniones que contiene son de sus autores. En la
+				medida que permita la ley, no respondemos de daños indirectos derivados del uso del servicio
+				ni del contenido publicado por terceros. Te recomendamos guardar copia de tus historias.
+			</p>
+			<h2>11. Cambios en estos términos</h2>
+			<p>
+				Podemos actualizar estos términos. Si los cambios son importantes, te avisaremos con
+				antelación y te pediremos que aceptes la nueva versión antes de seguir usando tu cuenta.
+			</p>
+			<h2>12. Ley aplicable</h2>
+			<p>
+				Estos términos se rigen por las leyes de la República de Colombia, sin perjuicio de las normas
+				de protección al consumidor o de datos personales de tu país de residencia que te sean
+				aplicables de forma obligatoria.
+			</p>
+			<h2>13. Contacto</h2>
+			<p>Para cualquier pregunta sobre estos términos, escribe a{ " " }
+			@contactLink()
+			.</p>
+		</article>
+	}
+}

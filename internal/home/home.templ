@@ -11,13 +11,13 @@ templ HomePage(user *auth.User) {
 		if user != nil {
 			<h1>Hola, { user.Name() }</h1>
 			<p>Iniciaste sesión como <strong>{ user.Username }</strong> ({ user.Email }).</p>
-			<form action="/cerrar-sesion" method="post">
+			<form action="/logout" method="post">
 				<button type="submit">Cerrar sesión</button>
 			</form>
 		} else {
 			<h1>Bienvenido a YorTale</h1>
 			<p>
-				<a href="/iniciar-sesion">Inicia sesión</a> o <a href="/registro">crea una cuenta</a>.
+				<a href="/login">Inicia sesión</a> o <a href="/register">crea una cuenta</a>.
 			</p>
 		}
 	}

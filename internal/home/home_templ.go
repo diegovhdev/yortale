@@ -87,12 +87,12 @@ func HomePage(user *auth.User) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, ").</p><form action=\"/cerrar-sesion\" method=\"post\"><button type=\"submit\">Cerrar sesión</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, ").</p><form action=\"/logout\" method=\"post\"><button type=\"submit\">Cerrar sesión</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<h1>Bienvenido a YorTale</h1><p><a href=\"/iniciar-sesion\">Inicia sesión</a> o <a href=\"/registro\">crea una cuenta</a>.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "<h1>Bienvenido a YorTale</h1><p><a href=\"/login\">Inicia sesión</a> o <a href=\"/register\">crea una cuenta</a>.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
