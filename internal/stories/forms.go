@@ -1,7 +1,9 @@
 package stories
 
 import (
+	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
 )
 
@@ -13,7 +15,8 @@ type StoryForm struct {
 	CancelURL     string
 	Title         string
 	Synopsis      string
-	GenreID       string
+	Kind          string
+	GenreIDs      []string // ids marcados, en orden: el de marcado con JS, alfabético sin JS
 	Language      string
 	ContentRating string
 	Status        string
@@ -27,6 +30,7 @@ func newStoryForm(genres []Genre) StoryForm {
 		Action:        "/stories",
 		IsNew:         true,
 		CancelURL:     "/my/stories",
+		Kind:          KindOriginal,
 		Language:      "es",
 		ContentRating: "general",
 		Status:        StatusDraft,
@@ -40,13 +44,14 @@ func editStoryForm(s Story, genres []Genre) StoryForm {
 		CancelURL:     s.URL(),
 		Title:         s.Title,
 		Synopsis:      s.Synopsis,
+		Kind:          s.Kind,
 		Language:      s.Language,
 		ContentRating: s.ContentRating,
 		Status:        s.Status,
 		Genres:        genres,
 	}
-	if s.GenreID != nil {
-		f.GenreID = strconv.Itoa(int(*s.GenreID))
+	for _, g := range s.Genres {
+		f.GenreIDs = append(f.GenreIDs, strconv.Itoa(int(g.ID)))
 	}
 	return f
 }
@@ -55,11 +60,57 @@ func (f StoryForm) Input() StoryInput {
 	return StoryInput{
 		Title:         f.Title,
 		Synopsis:      f.Synopsis,
-		GenreID:       f.GenreID,
+		Kind:          f.Kind,
+		GenreIDs:      f.GenreIDs,
 		Language:      f.Language,
 		ContentRating: f.ContentRating,
 		Status:        f.Status,
 	}
+}
+
+// genresField es el name de las casillas de género y la clave de sus errores.
+const genresField = "genres"
+
+// HasGenre dice si el género está marcado en el formulario.
+func (f StoryForm) HasGenre(id int16) bool {
+	return slices.Contains(f.GenreIDs, strconv.Itoa(int(id)))
+}
+
+// genreChoice es un género tal como lo recibe el componente genreChecks de Alpine. El id va
+// como texto para compararlo directamente con el value de las casillas.
+type genreChoice struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// GenreChoicesJSON son todos los géneros, para el atributo data-genres.
+func (f StoryForm) GenreChoicesJSON() string {
+	choices := make([]genreChoice, len(f.Genres))
+	for i, g := range f.Genres {
+		choices[i] = genreChoice{ID: strconv.Itoa(int(g.ID)), Name: g.Name}
+	}
+	return mustJSON(choices)
+}
+
+// SelectedGenresJSON son los ids marcados, en orden, para el atributo data-selected.
+// Al editar, es el orden guardado.
+func (f StoryForm) SelectedGenresJSON() string {
+	ids := []string{}
+	for _, id := range f.GenreIDs {
+		if id != "" {
+			ids = append(ids, id)
+		}
+	}
+	return mustJSON(ids)
+}
+
+// mustJSON solo recibe slices de strings y structs de strings, que siempre se pueden codificar.
+func mustJSON(v any) string {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 // ChapterForm es el formulario de capítulo, para crear y para editar.

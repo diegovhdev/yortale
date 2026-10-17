@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strconv"
 	"strings"
 	"unicode/utf8"
@@ -23,7 +24,7 @@ type storyStore interface {
 	Create(ctx context.Context, p StoryParams) (Story, error)
 	Update(ctx context.Context, id int64, p StoryParams) (Story, error)
 	Get(ctx context.Context, id int64) (Story, error)
-	ListPublished(ctx context.Context, query string, genreID *int16, limit, offset int) ([]Story, error)
+	ListPublished(ctx context.Context, query string, genreID *int16, kind string, limit, offset int) ([]Story, error)
 	ListByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 	Delete(ctx context.Context, id, authorID int64) error
 	ListGenres(ctx context.Context) ([]Genre, error)
@@ -58,7 +59,8 @@ func isAuthor(user *auth.User, s Story) bool {
 type StoryInput struct {
 	Title         string
 	Synopsis      string
-	GenreID       string
+	Kind          string
+	GenreIDs      []string // en el orden en que se muestran; los vacíos se ignoran
 	Language      string
 	ContentRating string
 	Status        string // se ignora al crear: toda historia empieza como borrador
@@ -136,6 +138,7 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 	p := StoryParams{
 		Title:         strings.TrimSpace(in.Title),
 		Synopsis:      normalizeText(in.Synopsis),
+		Kind:          in.Kind,
 		Language:      in.Language,
 		ContentRating: in.ContentRating,
 		Status:        in.Status,
@@ -151,6 +154,9 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 	if utf8.RuneCountInString(p.Synopsis) > 4000 {
 		errs["synopsis"] = "La sinopsis no puede tener más de 4000 caracteres."
 	}
+	if !validOption(Kinds, p.Kind) {
+		errs["kind"] = "Elige si la historia es original o un fanfic."
+	}
 	if !validOption(Languages, p.Language) {
 		errs["language"] = "Elige un idioma de la lista."
 	}
@@ -161,27 +167,49 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 		errs["status"] = "Elige un estado de la lista."
 	}
 
-	if in.GenreID != "" {
-		id, err := strconv.ParseInt(in.GenreID, 10, 16)
-		if err != nil {
-			errs["genre_id"] = "Elige un género de la lista."
-		} else {
-			genres, err := s.stories.ListGenres(ctx)
-			if err != nil {
-				return StoryParams{}, err
-			}
-			genreID := int16(id)
-			if !hasGenre(genres, genreID) {
-				errs["genre_id"] = "Elige un género de la lista."
-			}
-			p.GenreID = &genreID
-		}
+	if err := s.validateGenres(ctx, in.GenreIDs, &p, errs); err != nil {
+		return StoryParams{}, err
 	}
 
 	if len(errs) > 0 {
 		return p, errs
 	}
 	return p, nil
+}
+
+// validateGenres pasa a p.GenreIDs los géneros elegidos, en el orden en que llegan: con JS, el
+// orden en que el autor los marcó; sin JS, el alfabético del formulario. Los vacíos se ignoran.
+// Todos los errores van al campo genres.
+func (s *Service) validateGenres(ctx context.Context, ids []string, p *StoryParams, errs auth.ValidationErrors) error {
+	var genres []Genre
+	for _, raw := range ids {
+		if raw == "" {
+			continue
+		}
+		id, err := strconv.ParseInt(raw, 10, 16)
+		if err != nil {
+			errs[genresField] = "Elige géneros de la lista."
+			continue
+		}
+		if genres == nil {
+			if genres, err = s.stories.ListGenres(ctx); err != nil {
+				return err
+			}
+		}
+		genreID := int16(id)
+		switch {
+		case !hasGenre(genres, genreID):
+			errs[genresField] = "Elige géneros de la lista."
+		case slices.Contains(p.GenreIDs, genreID):
+			errs[genresField] = "No repitas géneros."
+		default:
+			p.GenreIDs = append(p.GenreIDs, genreID)
+		}
+	}
+	if len(p.GenreIDs) > maxGenres {
+		errs[genresField] = fmt.Sprintf("Elige como máximo %d géneros.", maxGenres)
+	}
+	return nil
 }
 
 func hasGenre(genres []Genre, id int16) bool {
@@ -249,7 +277,8 @@ func (s *Service) ByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 type ExploreFilter struct {
 	Query   string
 	GenreID *int16
-	Page    int // empieza en 1
+	Kind    string // "" para todos los tipos
+	Page    int    // empieza en 1
 }
 
 func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story, hasNext bool, err error) {
@@ -257,7 +286,7 @@ func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story
 		f.Page = 1
 	}
 	// Se pide uno de más para saber si hay página siguiente.
-	stories, err = s.stories.ListPublished(ctx, f.Query, f.GenreID, explorePageSize+1, (f.Page-1)*explorePageSize)
+	stories, err = s.stories.ListPublished(ctx, f.Query, f.GenreID, f.Kind, explorePageSize+1, (f.Page-1)*explorePageSize)
 	if err != nil {
 		return nil, false, err
 	}

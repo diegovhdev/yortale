@@ -1,6 +1,8 @@
 package components
 
 // Layout es la estructura HTML común a todas las páginas.
+// Los scripts con componentes de Alpine (Alpine.data) van antes que alpine.min.js: se
+// registran en el evento alpine:init, y defer los ejecuta en el orden en que aparecen.
 templ Layout(title string) {
 	<!DOCTYPE html>
 	<html lang="es">
@@ -10,6 +12,8 @@ templ Layout(title string) {
 			<title>{ title } · YorTale</title>
 			<link rel="stylesheet" href="/static/css/app.css"/>
 			<script src="/static/js/htmx.min.js" defer></script>
+			<script src="/static/js/genre-checks.js" defer></script>
+			<script src="/static/js/alpine.min.js" defer></script>
 		</head>
 		<body>
 			<header>

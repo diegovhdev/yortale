@@ -21,17 +21,18 @@ type ChapterView struct {
 	IsAuthor bool
 }
 
-// ExploreView es la página de explorar: búsqueda, filtro por género y resultados paginados.
+// ExploreView es la página de explorar: búsqueda, filtros por género y tipo, y resultados paginados.
 type ExploreView struct {
 	Query   string
 	GenreID string
+	Kind    string
 	Genres  []Genre
 	Stories []Story
 	Page    int
 	HasNext bool
 }
 
-// PageURL construye el enlace a otra página conservando la búsqueda y el género.
+// PageURL construye el enlace a otra página conservando la búsqueda y los filtros.
 func (v ExploreView) PageURL(page int) string {
 	q := url.Values{}
 	if v.Query != "" {
@@ -39,6 +40,9 @@ func (v ExploreView) PageURL(page int) string {
 	}
 	if v.GenreID != "" {
 		q.Set("genre", v.GenreID)
+	}
+	if v.Kind != "" {
+		q.Set("kind", v.Kind)
 	}
 	if page > 1 {
 		q.Set("page", strconv.Itoa(page))

@@ -20,10 +20,16 @@ templ ExplorePage(v ExploreView) {
 				Value:   v.GenreID,
 				Options: genreOptions(v.Genres, "Todos"),
 			})
+			@components.Select(components.SelectProps{
+				Label:   "Tipo",
+				Name:    "kind",
+				Value:   v.Kind,
+				Options: kindOptions("Todos"),
+			})
 			<button type="submit">Buscar</button>
 		</form>
 		if len(v.Stories) == 0 {
-			if v.Query != "" || v.GenreID != "" {
+			if v.Query != "" || v.GenreID != "" || v.Kind != "" {
 				<p>No encontramos historias con esa búsqueda.</p>
 			} else {
 				<p>Todavía no hay historias publicadas. <a href="/stories/new">¡Escribe la primera!</a></p>

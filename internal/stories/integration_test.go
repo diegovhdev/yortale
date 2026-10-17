@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -93,12 +94,21 @@ func TestStoriesIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	in := StoryInput{Title: "El Último Dragón", Synopsis: "Un dragón\r\nque vuela.", Language: "es", ContentRating: "general", GenreID: "1"}
+	in := StoryInput{Title: "El Último Dragón", Synopsis: "Un dragón\r\nque vuela.", Kind: KindFanfic, Language: "es", ContentRating: "general",
+		GenreIDs: []string{"3", "", "1"}} // Ciencia ficción y Fantasía; el hueco se cierra
+
+	genreIDs := func(s Story) []int16 {
+		ids := make([]int16, len(s.Genres))
+		for i, g := range s.Genres {
+			ids[i] = g.ID
+		}
+		return ids
+	}
 
 	// Crear: borrador, slug sin acentos, y sufijo si el autor repite título.
 	story, err := svc.Create(ctx, author.ID, in)
 	must(err)
-	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.GenreName == nil || story.Synopsis != "Un dragón\nque vuela." {
+	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.Kind != KindFanfic || !slices.Equal(genreIDs(story), []int16{3, 1}) || story.Synopsis != "Un dragón\nque vuela." {
 		t.Fatalf("historia creada inesperada: %+v", story)
 	}
 	twin, err := svc.Create(ctx, author.ID, in)
@@ -109,9 +119,15 @@ func TestStoriesIntegration(t *testing.T) {
 
 	// Validación.
 	var verrs auth.ValidationErrors
-	_, err = svc.Create(ctx, author.ID, StoryInput{Language: "xx", ContentRating: "general", GenreID: "999"})
-	if !errors.As(err, &verrs) || verrs["title"] == "" || verrs["language"] == "" || verrs["genre_id"] == "" {
+	_, err = svc.Create(ctx, author.ID, StoryInput{Kind: "poema", Language: "xx", ContentRating: "general", GenreIDs: []string{"999", "1", "1"}})
+	if !errors.As(err, &verrs) || verrs["title"] == "" || verrs["language"] == "" ||
+		verrs["kind"] == "" || verrs["genres"] == "" {
 		t.Fatalf("se esperaban errores de validación, llegó %v", err)
+	}
+	tooMany := in
+	tooMany.GenreIDs = []string{"1", "2", "3", "4"}
+	if _, err := svc.Create(ctx, author.ID, tooMany); !errors.As(err, &verrs) || verrs["genres"] == "" {
+		t.Fatalf("se esperaba error por más de %d géneros, llegó %v", maxGenres, err)
 	}
 	in.Status = "ongoing"
 	if _, err := svc.Update(ctx, author.ID, story.ID, in); !errors.As(err, &verrs) || verrs["status"] == "" {
@@ -154,6 +170,17 @@ func TestStoriesIntegration(t *testing.T) {
 	other := int16(2)
 	if found, _, err := svc.Explore(ctx, ExploreFilter{GenreID: &other}); err != nil || len(found) != 0 {
 		t.Fatalf("el filtro de género no filtró: %v %v", found, err)
+	}
+	second := int16(1) // el segundo género también cuenta para el filtro
+	if found, _, err := svc.Explore(ctx, ExploreFilter{GenreID: &second}); err != nil || len(found) != 1 {
+		t.Fatalf("el filtro por el segundo género no encontró la historia: %v %v", found, err)
+	}
+
+	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindOriginal}); err != nil || len(found) != 0 {
+		t.Fatalf("el filtro de tipo no filtró: %v %v", found, err)
+	}
+	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindFanfic, GenreID: &second}); err != nil || len(found) != 1 {
+		t.Fatalf("el filtro de tipo y género no encontró la historia: %v %v", found, err)
 	}
 
 	// Leer: el lector no ve el borrador; leer cuenta una sola vez por lector.
@@ -198,11 +225,13 @@ func TestStoriesIntegration(t *testing.T) {
 		t.Fatalf("capítulos tras borrar: %+v", page.Chapters)
 	}
 
-	// Cambiar el título cambia el slug; mantenerlo no.
+	// Cambiar el título cambia el slug; mantenerlo no. Los géneros se reemplazan.
 	in.Title = "Otro título"
+	in.Kind = KindOriginal
+	in.GenreIDs = []string{"2", "3", "1"} // el orden elegido es el que se guarda
 	story, err = svc.Update(ctx, author.ID, story.ID, in)
 	must(err)
-	if story.Slug != "otro-titulo" || story.Status != "ongoing" {
+	if story.Slug != "otro-titulo" || story.Kind != KindOriginal || story.Status != "ongoing" || !slices.Equal(genreIDs(story), []int16{2, 3, 1}) {
 		t.Fatalf("historia editada inesperada: %+v", story)
 	}
 

@@ -10,14 +10,14 @@ import (
 	"github.com/diegovhdev/yortale/web/components"
 )
 
-// Story es una historia tal como la muestra la aplicación, con los datos del autor y del género ya unidos.
+// Story es una historia tal como la muestra la aplicación, con los datos del autor y de los géneros ya unidos.
 type Story struct {
 	ID             int64
 	AuthorID       int64
 	AuthorUsername string
-	AuthorName     string // display_name, o el username si no tiene
-	GenreID        *int16
-	GenreName      *string
+	AuthorName     string  // display_name, o el username si no tiene
+	Kind           string  // original o fanfic
+	Genres         []Genre // hasta maxGenres, en el orden en que el autor quiere mostrarlos
 	Title          string
 	Slug           string
 	Synopsis       string
@@ -40,8 +40,20 @@ type Genre struct {
 
 const StatusDraft = "draft"
 
-// Las listas siguientes deben coincidir con los CHECK de stories.status y stories.content_rating.
+const (
+	KindOriginal = "original"
+	KindFanfic   = "fanfic"
+)
+
+// maxGenres debe coincidir con el CHECK (position BETWEEN 1 AND 3) de story_genres.
+const maxGenres = 3
+
+// Las listas siguientes deben coincidir con los CHECK de stories.kind, stories.status y stories.content_rating.
 var (
+	Kinds = []components.Option{
+		{Value: KindOriginal, Label: "Original"},
+		{Value: KindFanfic, Label: "Fanfic"},
+	}
 	Statuses = []components.Option{
 		{Value: StatusDraft, Label: "Borrador (solo tú la ves)"},
 		{Value: "ongoing", Label: "En curso"},
@@ -76,15 +88,18 @@ func (s Story) ChaptersURL() string   { return fmt.Sprintf("/stories/%d/chapters
 
 func (s Story) IsDraft() bool { return s.Status == StatusDraft }
 
+func (s Story) KindLabel() string          { return optionLabel(Kinds, s.Kind) }
 func (s Story) StatusLabel() string        { return optionLabel(Statuses, s.Status) }
 func (s Story) ContentRatingLabel() string { return optionLabel(ContentRatings, s.ContentRating) }
 func (s Story) LanguageLabel() string      { return optionLabel(Languages, s.Language) }
 
+// GenreLabel une los nombres de los géneros en orden: "Fantasía, Romance".
 func (s Story) GenreLabel() string {
-	if s.GenreName == nil {
-		return ""
+	names := make([]string, len(s.Genres))
+	for i, g := range s.Genres {
+		names[i] = g.Name
 	}
-	return *s.GenreName
+	return strings.Join(names, ", ")
 }
 
 func optionLabel(opts []components.Option, value string) string {
@@ -103,6 +118,11 @@ func validOption(opts []components.Option, value string) bool {
 		}
 	}
 	return false
+}
+
+// kindOptions son los tipos con una opción vacía delante, para el filtro de explorar.
+func kindOptions(emptyLabel string) []components.Option {
+	return append([]components.Option{{Value: "", Label: emptyLabel}}, Kinds...)
 }
 
 // genreOptions convierte los géneros en opciones de <select>; emptyLabel es la opción sin género.

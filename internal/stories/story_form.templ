@@ -1,6 +1,10 @@
 package stories
 
-import "github.com/diegovhdev/yortale/web/components"
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
 
 templ NewStoryPage(f StoryForm) {
 	@components.Layout("Nueva historia") {
@@ -47,13 +51,14 @@ templ StoryFormFragment(f StoryForm) {
 			Error: f.Errors["synopsis"],
 			Attrs: templ.Attributes{"rows": "6", "maxlength": "4000"},
 		})
-		@components.Select(components.SelectProps{
-			Label:   "Género",
-			Name:    "genre_id",
-			Value:   f.GenreID,
-			Error:   f.Errors["genre_id"],
-			Options: genreOptions(f.Genres, "Sin género"),
+		@components.Radios(components.RadioProps{
+			Legend:  "Tipo",
+			Name:    "kind",
+			Value:   f.Kind,
+			Error:   f.Errors["kind"],
+			Options: Kinds,
 		})
+		@genreChecks(f)
 		@components.Select(components.SelectProps{
 			Label:    "Idioma",
 			Name:     "language",
@@ -90,4 +95,61 @@ templ StoryFormFragment(f StoryForm) {
 		<a href={ templ.URL(f.CancelURL) }>Cancelar</a>
 		<span class="htmx-indicator">Guardando…</span>
 	</form>
+}
+
+// genreChecks es el campo de géneros: una casilla con estilo de etiqueta por género, en el
+// orden de ListGenres (alfabético).
+//
+// Sin JS, las casillas envían los marcados en ese orden alfabético.
+// Con JS, el componente genreChecks de Alpine (web/static/js/genre-checks.js) guarda los
+// marcados en el orden en que se marcan y los muestra debajo, en una vista previa con ×.
+// Esa vista previa envía los inputs ocultos en ese orden, y las casillas pierden su name
+// (:name="null") para no enviarlos dos veces.
+templ genreChecks(f StoryForm) {
+	<fieldset
+		class="genre-picker"
+		x-data="genreChecks"
+		data-genres={ f.GenreChoicesJSON() }
+		data-selected={ f.SelectedGenresJSON() }
+		data-max={ strconv.Itoa(maxGenres) }
+		@pageshow.window="resync()"
+		if f.Errors[genresField] != "" {
+			aria-describedby="genres-error"
+		}
+	>
+		<legend>Géneros (hasta { strconv.Itoa(maxGenres) })</legend>
+		<p class="hint" x-cloak>Se muestran en el orden en que los marques.</p>
+		<div class="genre-options" x-ref="options">
+			for _, g := range f.Genres {
+				<label class="genre-option">
+					<input
+						type="checkbox"
+						name={ genresField }
+						value={ strconv.Itoa(int(g.ID)) }
+						checked?={ f.HasGenre(g.ID) }
+						autocomplete="off"
+						x-model="selected"
+						:name="null"
+						:disabled={ "isBlocked('" + strconv.Itoa(int(g.ID)) + "')" }
+					/>
+					<span>{ g.Name }</span>
+				</label>
+			}
+		</div>
+		<div class="genre-preview" x-cloak x-show="selected.length > 0">
+			<p class="hint" id="genre-preview-label">Así se mostrarán:</p>
+			<ol x-ref="preview" aria-labelledby="genre-preview-label">
+				<template x-for="(id, i) in selected" :key="id">
+					<li :data-id="id">
+						<input type="hidden" name="genres" :value="id"/>
+						<span x-text="nameOf(id)"></span>
+						<button type="button" class="remove" :aria-label="'Quitar ' + nameOf(id)" @click="remove(i)">×</button>
+					</li>
+				</template>
+			</ol>
+		</div>
+		if f.Errors[genresField] != "" {
+			<small id="genres-error" class="error">{ f.Errors[genresField] }</small>
+		}
+	</fieldset>
 }

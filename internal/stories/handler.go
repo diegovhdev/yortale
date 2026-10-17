@@ -50,6 +50,7 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 	view := ExploreView{
 		Query:   strings.TrimSpace(q.Get("q")),
 		GenreID: q.Get("genre"),
+		Kind:    q.Get("kind"),
 		Page:    1,
 	}
 	if runes := []rune(view.Query); len(runes) > 200 {
@@ -59,7 +60,10 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 		view.Page = p
 	}
 
-	filter := ExploreFilter{Query: view.Query, Page: view.Page}
+	if !validOption(Kinds, view.Kind) {
+		view.Kind = ""
+	}
+	filter := ExploreFilter{Query: view.Query, Kind: view.Kind, Page: view.Page}
 	if id, err := strconv.ParseInt(view.GenreID, 10, 16); err == nil {
 		genreID := int16(id)
 		filter.GenreID = &genreID
@@ -133,7 +137,8 @@ func (h *Handler) Show(w http.ResponseWriter, r *http.Request) {
 func storyFormValues(r *http.Request, f *StoryForm) {
 	f.Title = r.PostFormValue("title")
 	f.Synopsis = r.PostFormValue("synopsis")
-	f.GenreID = r.PostFormValue("genre_id")
+	f.Kind = r.PostFormValue("kind")
+	f.GenreIDs = r.PostForm[genresField]
 	f.Language = r.PostFormValue("language")
 	f.ContentRating = r.PostFormValue("content_rating")
 	f.Status = r.PostFormValue("status")

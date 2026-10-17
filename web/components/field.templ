@@ -54,7 +54,7 @@ templ TextArea(p FieldProps) {
 	</div>
 }
 
-// Option es una opción de un <select>.
+// Option es una opción de un <select> o de un grupo de radios.
 type Option struct {
 	Value string
 	Label string
@@ -90,4 +90,34 @@ templ Select(p SelectProps) {
 			<small id={ p.Name + "-error" } class="error">{ p.Error }</small>
 		}
 	</div>
+}
+
+type RadioProps struct {
+	Legend  string
+	Name    string
+	Value   string // valor de la opción marcada
+	Error   string
+	Options []Option
+}
+
+// Radios es un grupo de botones de radio dentro de un <fieldset>, con su mensaje de error.
+// Sirve en lugar de Select cuando hay pocas opciones y conviene verlas todas a la vez.
+templ Radios(p RadioProps) {
+	<fieldset
+		class="field"
+		if p.Error != "" {
+			aria-describedby={ p.Name + "-error" }
+		}
+	>
+		<legend>{ p.Legend }</legend>
+		for _, o := range p.Options {
+			<label>
+				<input type="radio" name={ p.Name } value={ o.Value } checked?={ o.Value == p.Value } required/>
+				{ o.Label }
+			</label>
+		}
+		if p.Error != "" {
+			<small id={ p.Name + "-error" } class="error">{ p.Error }</small>
+		}
+	</fieldset>
 }

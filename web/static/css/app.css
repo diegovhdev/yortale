@@ -106,3 +106,161 @@ nav a + a,
   gap: 1rem;
   margin-top: 2rem;
 }
+
+/* Alpine quita x-cloak al iniciar; sin JS, lo marcado con x-cloak no se ve nunca. */
+[x-cloak] {
+  display: none !important;
+}
+
+.hint {
+  color: #555;
+  font-size: 0.875rem;
+  margin-top: 0;
+}
+
+.genre-picker {
+  margin-bottom: 1rem;
+}
+
+/* Casillas de género con aspecto de etiqueta. La casilla se oculta a la vista pero sigue
+   siendo un <input> real: se enfoca con Tab, se marca con espacio y se envía sin JS. */
+.genre-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.genre-option {
+  position: relative;
+}
+
+.genre-option input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.genre-option span {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #bbb;
+  border-radius: 999px;
+  background: #f4f4f4;
+  cursor: pointer;
+  user-select: none;
+}
+
+/* Marcada: además del color, un ✓, para no depender solo del color. */
+.genre-option input:checked + span {
+  background: #333;
+  border-color: #333;
+  color: #fff;
+}
+
+.genre-option input:checked + span::before {
+  content: "✓ ";
+}
+
+.genre-option input:focus-visible + span {
+  outline: 2px solid #333;
+  outline-offset: 2px;
+}
+
+.genre-option input:disabled + span {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Vista previa de los géneros en el orden elegido (genre-checks.js). */
+.genre-preview ol {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.genre-preview li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border: 1px solid #333;
+  border-radius: 999px;
+}
+
+/* La × usa opacity y no visibility: un botón con visibility: hidden no recibe el foco con Tab. */
+.genre-preview .remove {
+  border: 0;
+  background: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.35rem;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.genre-preview li:hover .remove,
+.genre-preview .remove:focus-visible {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .genre-preview .remove {
+    opacity: 1;
+  }
+}
+
+/* Selector de etiquetas ordenables de web/static/js/genre-picker.js, sin uso por ahora. */
+.genre-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  min-height: 2rem;
+}
+
+.genre-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.25rem 0.25rem 0.75rem;
+  border: 1px solid #bbb;
+  border-radius: 999px;
+  background: #f4f4f4;
+  cursor: grab;
+  user-select: none;
+  touch-action: none; /* sin esto, en el móvil arrastrar desplaza la página en vez de mover el género */
+}
+
+.genre-chip.dragging {
+  cursor: grabbing;
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.genre-chip .remove {
+  border: 0;
+  background: none;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.35rem;
+  cursor: pointer;
+  visibility: hidden;
+}
+
+/* La × solo aparece al pasar el ratón o con el foco; en pantallas táctiles no hay hover, así que se ve siempre. */
+.genre-chip:hover .remove,
+.genre-chip:focus-within .remove {
+  visibility: visible;
+}
+
+@media (hover: none) {
+  .genre-chip .remove {
+    visibility: visible;
+  }
+}

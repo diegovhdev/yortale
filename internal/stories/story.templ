@@ -70,6 +70,7 @@ templ chapterActions(c Chapter, first, last bool) {
 
 templ storyMeta(s Story) {
 	<p class="meta">
+		{ s.KindLabel() } ·
 		if s.GenreLabel() != "" {
 			{ s.GenreLabel() } ·
 		}

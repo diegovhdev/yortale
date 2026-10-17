@@ -18,23 +18,25 @@ func NewStoryRepository(db *pgxpool.Pool) *StoryRepository {
 	return &StoryRepository{db: db}
 }
 
-// storyColumns espera las tablas con los alias de storyJoins: s (historia), u (autor), g (género).
+// storyColumns espera las tablas con los alias de storyJoins: s (historia), u (autor).
+// Los géneros llegan como un array JSON ordenado por posición; encoding/json no distingue
+// mayúsculas en los nombres de campo, así que "id" llena Genre.ID.
 const storyColumns = `s.id, s.author_id, u.username::text, coalesce(nullif(u.display_name, ''), u.username::text),
-	s.genre_id, g.name, s.title, s.slug, coalesce(s.synopsis, ''), s.language, s.content_rating, s.status,
+	(SELECT coalesce(json_agg(json_build_object('id', g.id, 'name', g.name, 'slug', g.slug) ORDER BY sg.position), '[]')
+		FROM story_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.story_id = s.id),
+	s.kind, s.title, s.slug, coalesce(s.synopsis, ''), s.language, s.content_rating, s.status,
 	s.published_at, s.last_chapter_at, s.reads_count,
 	(SELECT count(*) FROM chapters c WHERE c.story_id = s.id AND c.is_published),
 	s.created_at, s.updated_at`
 
-// storyJoins une la historia (alias s) con su autor y su género. La tabla s puede ser stories
-// o un CTE con sus mismas columnas, como las filas de un INSERT ... RETURNING *.
+// storyJoins une la historia (alias s) con su autor.
 const storyJoins = `
-		JOIN users u ON u.id = s.author_id
-		LEFT JOIN genres g ON g.id = s.genre_id`
+		JOIN users u ON u.id = s.author_id`
 
 func scanStory(row pgx.Row) (Story, error) {
 	var s Story
 	err := row.Scan(&s.ID, &s.AuthorID, &s.AuthorUsername, &s.AuthorName,
-		&s.GenreID, &s.GenreName, &s.Title, &s.Slug, &s.Synopsis, &s.Language, &s.ContentRating, &s.Status,
+		&s.Genres, &s.Kind, &s.Title, &s.Slug, &s.Synopsis, &s.Language, &s.ContentRating, &s.Status,
 		&s.PublishedAt, &s.LastChapterAt, &s.ReadsCount, &s.ChapterCount,
 		&s.CreatedAt, &s.UpdatedAt)
 	return s, err
@@ -48,10 +50,11 @@ func collectStories(rows pgx.Rows) ([]Story, error) {
 // al crear es el autor nuevo; al actualizar, solo se modifica la historia si le pertenece.
 type StoryParams struct {
 	AuthorID      int64
-	GenreID       *int16
+	GenreIDs      []int16 // en el orden en que se muestran
 	Title         string
 	Slug          string
 	Synopsis      string
+	Kind          string
 	Language      string
 	ContentRating string
 	Status        string
@@ -60,45 +63,58 @@ type StoryParams struct {
 // slugConstraint es el nombre que PostgreSQL genera para UNIQUE (author_id, slug).
 const slugConstraint = "stories_author_id_slug_key"
 
-// Create inserta una historia. Devuelve ErrSlugTaken si el autor ya usa ese slug.
+// Create inserta una historia con sus géneros. Devuelve ErrSlugTaken si el autor ya usa ese slug.
 func (r *StoryRepository) Create(ctx context.Context, p StoryParams) (Story, error) {
 	const q = `
-		WITH saved AS (
-			INSERT INTO stories (author_id, genre_id, title, slug, synopsis, language, content_rating, status, published_at)
-			VALUES ($1, $2, $3, $4, nullif($5, ''), $6, $7, $8, CASE WHEN $8 <> 'draft' THEN now() END)
-			RETURNING *
-		)
-		SELECT ` + storyColumns + ` FROM saved s` + storyJoins
+		INSERT INTO stories (author_id, title, slug, synopsis, language, content_rating, status, kind, published_at)
+		VALUES ($1, $2, $3, nullif($4, ''), $5, $6, $7, $8, CASE WHEN $7 <> 'draft' THEN now() END)
+		RETURNING id`
 
-	s, err := scanStory(r.db.QueryRow(ctx, q,
-		p.AuthorID, p.GenreID, p.Title, p.Slug, p.Synopsis, p.Language, p.ContentRating, p.Status))
-	if err != nil {
-		if database.UniqueViolation(err) == slugConstraint {
-			return Story{}, ErrSlugTaken
+	var s Story
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		var id int64
+		err := tx.QueryRow(ctx, q,
+			p.AuthorID, p.Title, p.Slug, p.Synopsis, p.Language, p.ContentRating, p.Status, p.Kind).Scan(&id)
+		if err != nil {
+			return err
 		}
+		s, err = saveGenres(ctx, tx, id, p.GenreIDs)
+		return err
+	})
+	switch {
+	case database.UniqueViolation(err) == slugConstraint:
+		return Story{}, ErrSlugTaken
+	case err != nil:
 		return Story{}, fmt.Errorf("crear historia: %w", err)
 	}
 	return s, nil
 }
 
-// Update modifica la historia id si pertenece a p.AuthorID; si no, devuelve ErrNotFound.
+// Update modifica la historia id y sus géneros si pertenece a p.AuthorID; si no, devuelve ErrNotFound.
 // published_at se fija la primera vez que la historia deja de ser borrador.
 func (r *StoryRepository) Update(ctx context.Context, id int64, p StoryParams) (Story, error) {
 	const q = `
-		WITH saved AS (
-			UPDATE stories SET
-				genre_id = $3, title = $4, slug = $5, synopsis = nullif($6, ''),
-				language = $7, content_rating = $8, status = $9,
-				published_at = CASE WHEN $9 <> 'draft' THEN coalesce(published_at, now()) ELSE published_at END
-			WHERE id = $1 AND author_id = $2
-			RETURNING *
-		)
-		SELECT ` + storyColumns + ` FROM saved s` + storyJoins
+		UPDATE stories SET
+			title = $3, slug = $4, synopsis = nullif($5, ''),
+			language = $6, content_rating = $7, status = $8, kind = $9,
+			published_at = CASE WHEN $8 <> 'draft' THEN coalesce(published_at, now()) ELSE published_at END
+		WHERE id = $1 AND author_id = $2`
 
-	s, err := scanStory(r.db.QueryRow(ctx, q, id, p.AuthorID,
-		p.GenreID, p.Title, p.Slug, p.Synopsis, p.Language, p.ContentRating, p.Status))
+	var s Story
+	err := pgx.BeginFunc(ctx, r.db, func(tx pgx.Tx) error {
+		tag, err := tx.Exec(ctx, q, id, p.AuthorID,
+			p.Title, p.Slug, p.Synopsis, p.Language, p.ContentRating, p.Status, p.Kind)
+		if err != nil {
+			return err
+		}
+		if tag.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		s, err = saveGenres(ctx, tx, id, p.GenreIDs)
+		return err
+	})
 	switch {
-	case errors.Is(err, pgx.ErrNoRows):
+	case errors.Is(err, ErrNotFound):
 		return Story{}, ErrNotFound
 	case database.UniqueViolation(err) == slugConstraint:
 		return Story{}, ErrSlugTaken
@@ -108,9 +124,34 @@ func (r *StoryRepository) Update(ctx context.Context, id int64, p StoryParams) (
 	return s, nil
 }
 
-func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
+// saveGenres reemplaza los géneros de la historia, dentro de la transacción de Create o Update,
+// y devuelve la historia ya guardada. La posición sale del orden de genreIDs (1, 2, 3).
+func saveGenres(ctx context.Context, tx pgx.Tx, storyID int64, genreIDs []int16) (Story, error) {
+	if _, err := tx.Exec(ctx, `DELETE FROM story_genres WHERE story_id = $1`, storyID); err != nil {
+		return Story{}, err
+	}
+	const q = `
+		INSERT INTO story_genres (story_id, genre_id, position)
+		SELECT $1, t.genre_id, t.position
+		FROM unnest($2::smallint[]) WITH ORDINALITY AS t(genre_id, position)`
+	if _, err := tx.Exec(ctx, q, storyID, genreIDs); err != nil {
+		return Story{}, err
+	}
+	return getStory(ctx, tx, storyID)
+}
+
+// querier es lo que comparten el pool y una transacción, para leer una historia desde ambos.
+type querier interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+func getStory(ctx context.Context, db querier, id int64) (Story, error) {
 	const q = `SELECT ` + storyColumns + ` FROM stories s` + storyJoins + ` WHERE s.id = $1`
-	s, err := scanStory(r.db.QueryRow(ctx, q, id))
+	return scanStory(db.QueryRow(ctx, q, id))
+}
+
+func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
+	s, err := getStory(ctx, r.db, id)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return Story{}, ErrNotFound
 	}
@@ -124,13 +165,16 @@ func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
 // (columna search, configuración spanish) y, para tolerar errores de escritura, por parecido
 // del título con pg_trgm: % compara con el título entero y <% con su palabra más parecida,
 // que funciona mejor con búsquedas cortas. Sin query, ordena por las actualizadas más recientemente.
-func (r *StoryRepository) ListPublished(ctx context.Context, query string, genreID *int16, limit, offset int) ([]Story, error) {
+// genreID nil y kind "" no filtran.
+func (r *StoryRepository) ListPublished(ctx context.Context, query string, genreID *int16, kind string, limit, offset int) ([]Story, error) {
 	const q = `
 		SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
 		WHERE s.status <> 'draft'
 			AND ($1::text = '' OR s.search @@ websearch_to_tsquery('spanish', $1)
 				OR s.title % $1 OR $1 <% s.title)
-			AND ($2::smallint IS NULL OR s.genre_id = $2)
+			AND ($2::smallint IS NULL OR EXISTS (
+				SELECT 1 FROM story_genres sg WHERE sg.story_id = s.id AND sg.genre_id = $2))
+			AND ($5::text = '' OR s.kind = $5)
 		ORDER BY
 			CASE WHEN $1 = '' THEN 0
 				ELSE ts_rank(s.search, websearch_to_tsquery('spanish', $1)) + word_similarity($1, s.title)
@@ -139,7 +183,7 @@ func (r *StoryRepository) ListPublished(ctx context.Context, query string, genre
 			s.id DESC
 		LIMIT $3 OFFSET $4`
 
-	rows, err := r.db.Query(ctx, q, query, genreID, limit, offset)
+	rows, err := r.db.Query(ctx, q, query, genreID, limit, offset, kind)
 	if err != nil {
 		return nil, fmt.Errorf("listar historias: %w", err)
 	}
