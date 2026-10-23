@@ -38,6 +38,9 @@ func NewRouter(d Deps) http.Handler {
 	mux.HandleFunc("GET /login", authHandler.ShowLogin)
 	mux.HandleFunc("POST /login", authHandler.Login)
 	mux.HandleFunc("POST /logout", authHandler.Logout)
+	mux.Handle("GET /settings/profile", member(authHandler.ShowProfileSettings))
+	mux.Handle("POST /settings/profile", member(authHandler.UpdateProfile))
+	mux.HandleFunc("GET /users/{username}", storyHandler.AuthorProfile)
 
 	// Historias. La URL canónica es /stories/{id}/{slug}; las rutas fijas como
 	// /stories/{id}/edit tienen prioridad sobre {slug} porque son más específicas

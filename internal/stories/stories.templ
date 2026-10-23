@@ -3,6 +3,7 @@ package stories
 import (
 	"strconv"
 
+	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/web/components"
 )
 
@@ -14,12 +15,7 @@ templ ExplorePage(v ExploreView) {
 				<label for="q">Buscar</label>
 				<input type="search" id="q" name="q" value={ v.Query } maxlength="200" placeholder="Título o palabras de la sinopsis"/>
 			</div>
-			@components.Select(components.SelectProps{
-				Label:   "Género",
-				Name:    "genre",
-				Value:   v.GenreID,
-				Options: genreOptions(v.Genres, "Todos"),
-			})
+			@genreFilter(v)
 			@components.Select(components.SelectProps{
 				Label:   "Tipo",
 				Name:    "kind",
@@ -29,7 +25,7 @@ templ ExplorePage(v ExploreView) {
 			<button type="submit">Buscar</button>
 		</form>
 		if len(v.Stories) == 0 {
-			if v.Query != "" || v.GenreID != "" || v.Kind != "" {
+			if v.Filtered() {
 				<p>No encontramos historias con esa búsqueda.</p>
 			} else {
 				<p>Todavía no hay historias publicadas. <a href="/stories/new">¡Escribe la primera!</a></p>
@@ -37,7 +33,7 @@ templ ExplorePage(v ExploreView) {
 		} else {
 			<ul class="story-list">
 				for _, s := range v.Stories {
-					@storyCard(s, false)
+					@storyCard(s, true, false)
 				}
 			</ul>
 		}
@@ -55,38 +51,78 @@ templ ExplorePage(v ExploreView) {
 	}
 }
 
-templ MyStoriesPage(stories []Story) {
+templ MyStoriesPage(user *auth.User, stories []Story) {
 	@components.Layout("Mis historias") {
 		<h1>Mis historias</h1>
-		<p><a href="/stories/new">Nueva historia</a></p>
+		<p class="actions">
+			<a href="/stories/new">Nueva historia</a>
+			<a href={ templ.URL(user.ProfileURL()) }>Ver mi perfil público</a>
+			<a href="/settings/profile">Editar perfil</a>
+		</p>
 		if len(stories) == 0 {
 			<p>Aún no has escrito ninguna historia.</p>
 		} else {
 			<ul class="story-list">
 				for _, s := range stories {
-					@storyCard(s, true)
+					@storyCard(s, false, true)
 				}
 			</ul>
 		}
 	}
 }
 
-// storyCard es una historia dentro de un listado. forAuthor añade el enlace de edición.
-templ storyCard(s Story, forAuthor bool) {
+// storyCard es una historia dentro de un listado. showAuthor añade el «por …» (sobra en
+// «Mis historias» y en el perfil del autor); authorActions, los enlaces para editarla.
+templ storyCard(s Story, showAuthor, authorActions bool) {
 	<li class="story-card">
 		<h2><a href={ templ.URL(s.URL()) }>{ s.Title }</a></h2>
-		if !forAuthor {
-			<p>por { s.AuthorName }</p>
+		if showAuthor {
+			<p>
+				por{ " " }
+				@authorLink(s, false)
+			</p>
 		}
 		@storyMeta(s)
 		if s.Synopsis != "" {
 			<p>{ excerpt(s.Synopsis, 300) }</p>
 		}
-		if forAuthor {
+		if authorActions {
 			<p class="actions">
 				<a href={ templ.URL(s.NewChapterURL()) }>Nuevo capítulo</a>
 				<a href={ templ.URL(s.EditURL()) }>Editar</a>
 			</p>
 		}
 	</li>
+}
+
+// genreFilter son las casillas de géneros del buscador: la historia debe tener todos los
+// marcados, en cualquier orden. Sin JS se envían todas las marcadas y el servidor se queda
+// con las primeras maxGenres; con el componente genreFilter de Alpine
+// (web/static/js/genre-checks.js), al llegar a maxGenres se desactivan las demás.
+templ genreFilter(v ExploreView) {
+	<fieldset
+		class="genre-picker"
+		x-data="genreFilter"
+		data-selected={ v.SelectedGenresJSON() }
+		data-max={ strconv.Itoa(maxGenres) }
+		@pageshow.window="resync()"
+	>
+		<legend>Géneros (hasta { strconv.Itoa(maxGenres) }; la historia debe tenerlos todos)</legend>
+		<div class="genre-options">
+			for _, g := range v.Genres {
+				<label class="genre-option">
+					<input
+						type="checkbox"
+						name="genre"
+						value={ strconv.Itoa(int(g.ID)) }
+						checked?={ v.HasGenre(g.ID) }
+						autocomplete="off"
+						x-model="selected"
+						:disabled={ "isBlocked('" + strconv.Itoa(int(g.ID)) + "')" }
+					/>
+					<span>{ g.Name }</span>
+				</label>
+			}
+		</div>
+	</fieldset>
 }

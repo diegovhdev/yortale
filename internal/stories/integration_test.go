@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,7 +85,8 @@ func createUser(t *testing.T, pool *pgxpool.Pool, username string) *auth.User {
 func TestStoriesIntegration(t *testing.T) {
 	pool := testDB(t)
 	ctx := context.Background()
-	svc := NewService(NewStoryRepository(pool), NewChapterRepository(pool))
+	users := auth.NewService(auth.NewUserRepository(pool), auth.NewSessionRepository(pool))
+	svc := NewService(NewStoryRepository(pool), NewChapterRepository(pool), users)
 	author := createUser(t, pool, "autora")
 	reader := createUser(t, pool, "lector")
 
@@ -167,19 +169,27 @@ func TestStoriesIntegration(t *testing.T) {
 			t.Errorf("buscar %q encontró %d historias", q, len(found))
 		}
 	}
-	other := int16(2)
-	if found, _, err := svc.Explore(ctx, ExploreFilter{GenreID: &other}); err != nil || len(found) != 0 {
-		t.Fatalf("el filtro de género no filtró: %v %v", found, err)
+	// La historia tiene Ciencia ficción (3) y Fantasía (1): el filtro pide que estén todos
+	// los marcados, en cualquier orden.
+	for _, tc := range []struct {
+		genres []int16
+		want   int
+	}{
+		{[]int16{2}, 0},    // no lo tiene
+		{[]int16{1}, 1},    // el segundo género también cuenta
+		{[]int16{1, 3}, 1}, // los dos, en otro orden
+		{[]int16{3, 2}, 0}, // uno sí y otro no
+	} {
+		if found, _, err := svc.Explore(ctx, ExploreFilter{GenreIDs: tc.genres}); err != nil || len(found) != tc.want {
+			t.Fatalf("filtro por géneros %v: %d historias, se esperaban %d (%v)", tc.genres, len(found), tc.want, err)
+		}
 	}
-	second := int16(1) // el segundo género también cuenta para el filtro
-	if found, _, err := svc.Explore(ctx, ExploreFilter{GenreID: &second}); err != nil || len(found) != 1 {
-		t.Fatalf("el filtro por el segundo género no encontró la historia: %v %v", found, err)
-	}
+	second := []int16{1}
 
 	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindOriginal}); err != nil || len(found) != 0 {
 		t.Fatalf("el filtro de tipo no filtró: %v %v", found, err)
 	}
-	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindFanfic, GenreID: &second}); err != nil || len(found) != 1 {
+	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindFanfic, GenreIDs: second}); err != nil || len(found) != 1 {
 		t.Fatalf("el filtro de tipo y género no encontró la historia: %v %v", found, err)
 	}
 
@@ -233,6 +243,35 @@ func TestStoriesIntegration(t *testing.T) {
 	must(err)
 	if story.Slug != "otro-titulo" || story.Kind != KindOriginal || story.Status != "ongoing" || !slices.Equal(genreIDs(story), []int16{2, 3, 1}) {
 		t.Fatalf("historia editada inesperada: %+v", story)
+	}
+
+	// Perfil: la descripción se guarda normalizada y el perfil público solo muestra lo publicado.
+	_, err = users.UpdateProfile(ctx, author.ID, auth.ProfileInput{DisplayName: "  La   Autora ", Bio: "Hola.\r\n\r\nEscribo dragones."})
+	must(err)
+	if _, err := users.UpdateProfile(ctx, author.ID, auth.ProfileInput{Bio: strings.Repeat("a", 1001)}); !errors.As(err, &verrs) || verrs["bio"] == "" {
+		t.Fatalf("se esperaba error por descripción larga, llegó %v", err)
+	}
+	profile, err := svc.AuthorPage(ctx, reader, "AUTORA") // el username no distingue mayúsculas
+	must(err)
+	if profile.Author.Username != "autora" || profile.Author.Name() != "La Autora" ||
+		profile.Author.Bio != "Hola.\n\nEscribo dragones." || profile.IsOwner {
+		t.Fatalf("perfil inesperado: %+v", profile)
+	}
+	var reads int64
+	for _, s := range profile.Stories {
+		if s.IsDraft() {
+			t.Fatalf("el perfil público muestra un borrador: %+v", s)
+		}
+		reads += s.ReadsCount
+	}
+	if len(profile.Stories) == 0 || profile.Stories[0].ID != story.ID || profile.TotalReads != reads {
+		t.Fatalf("historias del perfil: %+v (lectores %d)", profile.Stories, profile.TotalReads)
+	}
+	if own, err := svc.AuthorPage(ctx, author, "autora"); err != nil || !own.IsOwner {
+		t.Fatalf("el autor no se reconoce en su perfil: %v", err)
+	}
+	if _, err := svc.AuthorPage(ctx, reader, "nadie"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("perfil inexistente: %v", err)
 	}
 
 	// Borrar: solo el autor.

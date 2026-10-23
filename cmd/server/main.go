@@ -48,7 +48,7 @@ func run() error {
 	users := auth.NewUserRepository(pool)
 	sessions := auth.NewSessionRepository(pool)
 	authService := auth.NewService(users, sessions)
-	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool))
+	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), authService)
 
 	go cleanupSessions(ctx, authService)
 

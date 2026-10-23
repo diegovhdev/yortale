@@ -30,6 +30,13 @@ var (
 	usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`)
 )
 
+const (
+	// maxBioRunes debe coincidir con el CHECK (char_length(bio) <= 1000) de users.bio.
+	maxBioRunes = 1000
+	// display_name no tiene CHECK en la base de datos; este límite es la única validación.
+	maxDisplayNameRunes = 50
+)
+
 // ValidationErrors asocia el nombre de cada campo del formulario con su mensaje de error.
 type ValidationErrors map[string]string
 
@@ -38,6 +45,8 @@ func (v ValidationErrors) Error() string { return "datos de formulario inválido
 type userStore interface {
 	Create(ctx context.Context, p CreateUserParams) (User, error)
 	GetWithPasswordByLogin(ctx context.Context, login string) (User, string, error)
+	GetByUsername(ctx context.Context, username string) (User, error)
+	UpdateProfile(ctx context.Context, id int64, p ProfileParams) (User, error)
 }
 
 type sessionStore interface {
@@ -139,6 +148,41 @@ func (s *Service) Authenticate(ctx context.Context, login, password string) (Use
 	}
 	return user, nil
 }
+
+// ---------- Perfil ----------
+
+// UserByUsername devuelve el usuario con ese username (sin distinguir mayúsculas), o ErrNotFound.
+func (s *Service) UserByUsername(ctx context.Context, username string) (User, error) {
+	return s.users.GetByUsername(ctx, username)
+}
+
+// ProfileInput son los valores del formulario de perfil, tal como llegan.
+type ProfileInput struct {
+	DisplayName string
+	Bio         string
+}
+
+// UpdateProfile valida y guarda el nombre para mostrar y la descripción del usuario.
+// Devuelve ValidationErrors si hay errores.
+func (s *Service) UpdateProfile(ctx context.Context, userID int64, in ProfileInput) (User, error) {
+	p := ProfileParams{
+		DisplayName: strings.Join(strings.Fields(in.DisplayName), " "), // sin saltos ni espacios repetidos
+		Bio:         strings.TrimSpace(strings.ReplaceAll(in.Bio, "\r\n", "\n")),
+	}
+	errs := ValidationErrors{}
+	if utf8.RuneCountInString(p.DisplayName) > maxDisplayNameRunes {
+		errs["display_name"] = fmt.Sprintf("El nombre no puede tener más de %d caracteres.", maxDisplayNameRunes)
+	}
+	if utf8.RuneCountInString(p.Bio) > maxBioRunes {
+		errs["bio"] = fmt.Sprintf("La descripción no puede tener más de %d caracteres.", maxBioRunes)
+	}
+	if len(errs) > 0 {
+		return User{}, errs
+	}
+	return s.users.UpdateProfile(ctx, userID, p)
+}
+
+// ---------- Sesiones ----------
 
 // StartSession crea una sesión y devuelve el token que irá en la cookie.
 func (s *Service) StartSession(ctx context.Context, userID int64) (string, time.Time, error) {

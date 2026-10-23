@@ -1,0 +1,44 @@
+package stories
+
+import (
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// AuthorPage es el perfil público de un autor: sus datos, su descripción y sus historias publicadas.
+templ AuthorPage(v AuthorView) {
+	@components.Layout(v.Author.Name()) {
+		<section class="author-profile">
+			<h1>{ v.Author.Name() }</h1>
+			<p class="meta">
+				{ "@" + v.Author.Username } · se unió el { formatDate(v.Author.CreatedAt) } ·
+				{ plural(int64(len(v.Stories)), "historia publicada", "historias publicadas") } ·
+				{ plural(v.TotalReads, "lector", "lectores") }
+			</p>
+			if v.Author.Bio != "" {
+				<div class="bio">
+					for _, p := range paragraphs(v.Author.Bio) {
+						<p>{ p }</p>
+					}
+				</div>
+			} else if v.IsOwner {
+				<p class="notice">Todavía no tienes descripción. <a href="/settings/profile">Añade una</a> para que los lectores te conozcan.</p>
+			}
+			if v.IsOwner {
+				<p class="actions">
+					<a href="/settings/profile">Editar perfil</a>
+					<a href="/my/stories">Mis historias (incluye borradores)</a>
+				</p>
+			}
+		</section>
+		<h2>Historias</h2>
+		if len(v.Stories) == 0 {
+			<p>{ v.Author.Name() } todavía no ha publicado ninguna historia.</p>
+		} else {
+			<ul class="story-list">
+				for _, s := range v.Stories {
+					@storyCard(s, false, false)
+				}
+			</ul>
+		}
+	}
+}

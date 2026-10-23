@@ -2,7 +2,10 @@ package stories
 
 import (
 	"net/url"
+	"slices"
 	"strconv"
+
+	"github.com/diegovhdev/yortale/internal/auth"
 )
 
 // StoryView es lo que muestra la página de una historia.
@@ -21,15 +24,15 @@ type ChapterView struct {
 	IsAuthor bool
 }
 
-// ExploreView es la página de explorar: búsqueda, filtros por género y tipo, y resultados paginados.
+// ExploreView es la página de explorar: búsqueda, filtros por géneros y tipo, y resultados paginados.
 type ExploreView struct {
-	Query   string
-	GenreID string
-	Kind    string
-	Genres  []Genre
-	Stories []Story
-	Page    int
-	HasNext bool
+	Query    string
+	GenreIDs []string // hasta maxGenres, ya validados
+	Kind     string
+	Genres   []Genre
+	Stories  []Story
+	Page     int
+	HasNext  bool
 }
 
 // PageURL construye el enlace a otra página conservando la búsqueda y los filtros.
@@ -38,8 +41,8 @@ func (v ExploreView) PageURL(page int) string {
 	if v.Query != "" {
 		q.Set("q", v.Query)
 	}
-	if v.GenreID != "" {
-		q.Set("genre", v.GenreID)
+	for _, id := range v.GenreIDs {
+		q.Add("genre", id)
 	}
 	if v.Kind != "" {
 		q.Set("kind", v.Kind)
@@ -51,4 +54,31 @@ func (v ExploreView) PageURL(page int) string {
 		return "/stories"
 	}
 	return "/stories?" + q.Encode()
+}
+
+// HasGenre dice si el género está marcado en el filtro.
+func (v ExploreView) HasGenre(id int16) bool {
+	return slices.Contains(v.GenreIDs, strconv.Itoa(int(id)))
+}
+
+// Filtered dice si hay alguna búsqueda o filtro activo.
+func (v ExploreView) Filtered() bool {
+	return v.Query != "" || len(v.GenreIDs) > 0 || v.Kind != ""
+}
+
+// SelectedGenresJSON son los géneros marcados, para el atributo data-selected del componente
+// genreFilter de Alpine. Sin géneros codifica [] y no null, porque el JS espera un array.
+func (v ExploreView) SelectedGenresJSON() string {
+	if v.GenreIDs == nil {
+		return "[]"
+	}
+	return mustJSON(v.GenreIDs)
+}
+
+// AuthorView es el perfil público de un autor.
+type AuthorView struct {
+	Author     auth.User
+	Stories    []Story // solo publicadas
+	TotalReads int64   // suma de los lectores de sus historias
+	IsOwner    bool    // quien mira es el propio autor
 }

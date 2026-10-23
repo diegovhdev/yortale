@@ -6,7 +6,10 @@ templ StoryPage(v StoryView) {
 	@components.Layout(v.Story.Title) {
 		<article class="story">
 			<h1>{ v.Story.Title }</h1>
-			<p>por <strong>{ v.Story.AuthorName }</strong></p>
+			<p>
+				por{ " " }
+				@authorLink(v.Story, true)
+			</p>
 			@storyMeta(v.Story)
 			if v.Story.IsDraft() {
 				<p class="notice">Esta historia es un borrador: solo tú puedes verla. Se publica al publicar su primer capítulo.</p>
@@ -68,11 +71,30 @@ templ chapterActions(c Chapter, first, last bool) {
 	</span>
 }
 
+// authorLink enlaza al perfil del autor. El nombre para mostrar no es único, así que el
+// @username (que sí lo es) va siempre en el title del enlace y, con showHandle, también a la
+// vista, para que nadie pueda hacerse pasar por otro autor copiando su nombre. Si el autor no
+// tiene nombre para mostrar, AuthorName ya es el username y no se repite.
+templ authorLink(s Story, showHandle bool) {
+	<a href={ templ.URL(s.AuthorURL()) } title={ "@" + s.AuthorUsername }>{ s.AuthorName }</a>
+	if showHandle && s.AuthorName != s.AuthorUsername {
+		<span class="handle">{ "@" + s.AuthorUsername }</span>
+	}
+}
+
+// storyMeta es la línea de datos de una historia. El tipo y los géneros enlazan a explorar
+// ya filtrado, para saltar a historias parecidas.
 templ storyMeta(s Story) {
 	<p class="meta">
-		{ s.KindLabel() } ·
-		if s.GenreLabel() != "" {
-			{ s.GenreLabel() } ·
+		<a href={ templ.URL(s.KindURL()) }>{ s.KindLabel() }</a> ·
+		if len(s.Genres) > 0 {
+			for i, g := range s.Genres {
+				if i > 0 {
+					,
+				}
+				<a href={ templ.URL(g.URL()) }>{ g.Name }</a>
+			}
+			·
 		}
 		{ s.ContentRatingLabel() } · { s.StatusLabel() } · { s.LanguageLabel() } ·
 		{ plural(int64(s.ChapterCount), "capítulo", "capítulos") } ·

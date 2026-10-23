@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/diegovhdev/yortale/internal/auth"
+
 	"github.com/diegovhdev/yortale/web/components"
 )
 
@@ -88,19 +90,16 @@ func (s Story) ChaptersURL() string   { return fmt.Sprintf("/stories/%d/chapters
 
 func (s Story) IsDraft() bool { return s.Status == StatusDraft }
 
+func (s Story) AuthorURL() string { return auth.ProfileURL(s.AuthorUsername) }
+
+// KindURL y GenreURL llevan a explorar ya filtrado por ese tipo o género.
+func (s Story) KindURL() string { return "/stories?kind=" + url.QueryEscape(s.Kind) }
+func (g Genre) URL() string     { return fmt.Sprintf("/stories?genre=%d", g.ID) }
+
 func (s Story) KindLabel() string          { return optionLabel(Kinds, s.Kind) }
 func (s Story) StatusLabel() string        { return optionLabel(Statuses, s.Status) }
 func (s Story) ContentRatingLabel() string { return optionLabel(ContentRatings, s.ContentRating) }
 func (s Story) LanguageLabel() string      { return optionLabel(Languages, s.Language) }
-
-// GenreLabel une los nombres de los géneros en orden: "Fantasía, Romance".
-func (s Story) GenreLabel() string {
-	names := make([]string, len(s.Genres))
-	for i, g := range s.Genres {
-		names[i] = g.Name
-	}
-	return strings.Join(names, ", ")
-}
 
 func optionLabel(opts []components.Option, value string) string {
 	for _, o := range opts {
@@ -123,16 +122,6 @@ func validOption(opts []components.Option, value string) bool {
 // kindOptions son los tipos con una opción vacía delante, para el filtro de explorar.
 func kindOptions(emptyLabel string) []components.Option {
 	return append([]components.Option{{Value: "", Label: emptyLabel}}, Kinds...)
-}
-
-// genreOptions convierte los géneros en opciones de <select>; emptyLabel es la opción sin género.
-func genreOptions(genres []Genre, emptyLabel string) []components.Option {
-	opts := make([]components.Option, 0, len(genres)+1)
-	opts = append(opts, components.Option{Value: "", Label: emptyLabel})
-	for _, g := range genres {
-		opts = append(opts, components.Option{Value: fmt.Sprint(g.ID), Label: g.Name})
-	}
-	return opts
 }
 
 var months = [...]string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",

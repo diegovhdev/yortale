@@ -19,11 +19,11 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 }
 
 // Las columnas citext se convierten a text (::text) para leerlas como string en Go.
-const userColumns = `u.id, u.username::text, u.email::text, u.display_name, u.role, u.created_at`
+const userColumns = `u.id, u.username::text, u.email::text, u.display_name, coalesce(u.bio, ''), u.role, u.created_at`
 
 func scanUser(row pgx.Row, extra ...any) (User, error) {
 	var u User
-	dest := append([]any{&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.Role, &u.CreatedAt}, extra...)
+	dest := append([]any{&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.Bio, &u.Role, &u.CreatedAt}, extra...)
 	err := row.Scan(dest...)
 	return u, err
 }
@@ -73,4 +73,39 @@ func (r *UserRepository) GetWithPasswordByLogin(ctx context.Context, login strin
 		return User{}, "", fmt.Errorf("buscar usuario: %w", err)
 	}
 	return user, hash, nil
+}
+
+// GetByUsername busca un usuario por su username, sin distinguir mayúsculas (citext).
+func (r *UserRepository) GetByUsername(ctx context.Context, username string) (User, error) {
+	const q = `SELECT ` + userColumns + ` FROM users u WHERE u.username = $1`
+	user, err := scanUser(r.db.QueryRow(ctx, q, username))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrNotFound
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("buscar usuario por username: %w", err)
+	}
+	return user, nil
+}
+
+// ProfileParams son los campos del perfil que el usuario puede editar. Los vacíos se guardan como NULL.
+type ProfileParams struct {
+	DisplayName string
+	Bio         string
+}
+
+// UpdateProfile guarda el nombre para mostrar y la descripción del usuario id.
+func (r *UserRepository) UpdateProfile(ctx context.Context, id int64, p ProfileParams) (User, error) {
+	const q = `
+		UPDATE users AS u SET display_name = nullif($2, ''), bio = nullif($3, '')
+		WHERE u.id = $1
+		RETURNING ` + userColumns
+	user, err := scanUser(r.db.QueryRow(ctx, q, id, p.DisplayName, p.Bio))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, ErrNotFound
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("actualizar perfil: %w", err)
+	}
+	return user, nil
 }

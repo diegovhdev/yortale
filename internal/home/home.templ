@@ -12,6 +12,7 @@ templ HomePage(user *auth.User) {
 			<h1>Hola, { user.Name() }</h1>
 			<p>Iniciaste sesión como <strong>{ user.Username }</strong> ({ user.Email }).</p>
 			<p><a href="/stories">Explora historias</a> o <a href="/my/stories">sigue escribiendo las tuyas</a>.</p>
+			<p><a href={ templ.URL(user.ProfileURL()) }>Ver tu perfil público</a> · <a href="/settings/profile">Editar perfil</a></p>
 			<form action="/logout" method="post">
 				<button type="submit">Cerrar sesión</button>
 			</form>

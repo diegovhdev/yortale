@@ -165,15 +165,16 @@ func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
 // (columna search, configuración spanish) y, para tolerar errores de escritura, por parecido
 // del título con pg_trgm: % compara con el título entero y <% con su palabra más parecida,
 // que funciona mejor con búsquedas cortas. Sin query, ordena por las actualizadas más recientemente.
-// genreID nil y kind "" no filtran.
-func (r *StoryRepository) ListPublished(ctx context.Context, query string, genreID *int16, kind string, limit, offset int) ([]Story, error) {
+// Con genreIDs, la historia debe tenerlos todos (en cualquier posición). genreIDs vacío y
+// kind "" no filtran.
+func (r *StoryRepository) ListPublished(ctx context.Context, query string, genreIDs []int16, kind string, limit, offset int) ([]Story, error) {
 	const q = `
 		SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
 		WHERE s.status <> 'draft'
 			AND ($1::text = '' OR s.search @@ websearch_to_tsquery('spanish', $1)
 				OR s.title % $1 OR $1 <% s.title)
-			AND ($2::smallint IS NULL OR EXISTS (
-				SELECT 1 FROM story_genres sg WHERE sg.story_id = s.id AND sg.genre_id = $2))
+			AND (coalesce(cardinality($2::smallint[]), 0) = 0
+				OR $2::smallint[] <@ ARRAY(SELECT sg.genre_id FROM story_genres sg WHERE sg.story_id = s.id))
 			AND ($5::text = '' OR s.kind = $5)
 		ORDER BY
 			CASE WHEN $1 = '' THEN 0
@@ -183,7 +184,7 @@ func (r *StoryRepository) ListPublished(ctx context.Context, query string, genre
 			s.id DESC
 		LIMIT $3 OFFSET $4`
 
-	rows, err := r.db.Query(ctx, q, query, genreID, limit, offset, kind)
+	rows, err := r.db.Query(ctx, q, query, genreIDs, limit, offset, kind)
 	if err != nil {
 		return nil, fmt.Errorf("listar historias: %w", err)
 	}
@@ -208,6 +209,24 @@ func (r *StoryRepository) ListByAuthor(ctx context.Context, authorID int64) ([]S
 	stories, err := collectStories(rows)
 	if err != nil {
 		return nil, fmt.Errorf("listar historias del autor: %w", err)
+	}
+	return stories, nil
+}
+
+// ListPublishedByAuthor devuelve las historias del autor que no son borradores, para su
+// perfil público, empezando por las actualizadas más recientemente.
+func (r *StoryRepository) ListPublishedByAuthor(ctx context.Context, authorID int64) ([]Story, error) {
+	const q = `SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
+		WHERE s.author_id = $1 AND s.status <> 'draft'
+		ORDER BY s.last_chapter_at DESC NULLS LAST, s.id DESC`
+
+	rows, err := r.db.Query(ctx, q, authorID)
+	if err != nil {
+		return nil, fmt.Errorf("listar historias publicadas del autor: %w", err)
+	}
+	stories, err := collectStories(rows)
+	if err != nil {
+		return nil, fmt.Errorf("listar historias publicadas del autor: %w", err)
 	}
 	return stories, nil
 }

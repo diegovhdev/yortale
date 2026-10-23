@@ -1,24 +1,26 @@
-// Componente genreChecks de Alpine.js para el campo de géneros del formulario de historia
-// (genreChecks en internal/stories/story_form.templ).
+// Componentes de Alpine.js para las casillas de géneros:
+//   - genreChecks: el campo de géneros del formulario de historia (story_form.templ), con una
+//     vista previa en el orden en que se marcaron.
+//   - genreFilter: las casillas de géneros del buscador de explorar (stories.templ).
 //
-// selected guarda los ids marcados en el orden en que se marcaron: las casillas lo usan con
-// x-model, que en un array añade al final al marcar y quita al desmarcar. La vista previa lo
-// recorre con x-for y envía un input oculto por género en ese orden. Todo sale de selected,
-// así que quitar desde la vista previa es solo sacar el id del array.
-document.addEventListener("alpine:init", () => {
-  Alpine.data("genreChecks", () => ({
-    genres: [], // [{id, name}] con el id como texto
+// En los dos, selected guarda los ids marcados en el orden en que se marcaron: las casillas
+// lo usan con x-model, que en un array añade al final al marcar y quita al desmarcar.
+
+// limitedChecks es la base común: casillas con x-model="selected", como mucho max marcadas.
+// Los datos iniciales llegan en data-selected y data-max. Son métodos y no getters porque
+// el objeto se copia con ...spread, y un getter copiado así se queda con su primer valor.
+function limitedChecks() {
+  return {
     selected: [],
     max: 3,
 
-    init() {
+    // initLimit lee los datos iniciales. Con known (los ids válidos) descarta los que no
+    // existen o están repetidos, por si el servidor devolvió el formulario con un error.
+    initLimit(known = null) {
       const data = this.$el.dataset;
-      this.genres = JSON.parse(data.genres);
       this.max = Number(data.max);
-      // Si el servidor devolvió el formulario con un id que no existe o repetido, se descarta:
-      // el mensaje de error ya explica qué pasó.
-      const known = this.genres.map((g) => g.id);
-      this.selected = [...new Set(JSON.parse(data.selected))].filter((id) => known.includes(id));
+      const ids = [...new Set(JSON.parse(data.selected))];
+      this.selected = known ? ids.filter((id) => known.includes(id)) : ids;
       // Barrera por si algo deja marcar de más: el estado nunca pasa del máximo, y x-model
       // desmarca la casilla sobrante.
       this.$watch("selected", (ids) => {
@@ -26,13 +28,38 @@ document.addEventListener("alpine:init", () => {
       });
     },
 
-    get full() {
-      return this.selected.length >= this.max;
-    },
-
     // isBlocked desactiva las casillas sin marcar cuando ya se llegó al máximo.
     isBlocked(id) {
-      return this.full && !this.selected.includes(id);
+      return this.selected.length >= this.max && !this.selected.includes(id);
+    },
+
+    // resync vuelve a aplicar selected a las casillas. Se llama en pageshow: al volver con
+    // «Atrás», el navegador puede restaurar casillas marcadas sin pasar por x-model
+    // (autocomplete="off" lo evita en la mayoría de los casos; esto cubre el resto).
+    resync() {
+      this.selected = [...this.selected];
+    },
+  };
+}
+
+document.addEventListener("alpine:init", () => {
+  Alpine.data("genreFilter", () => ({
+    ...limitedChecks(),
+
+    init() {
+      this.initLimit();
+    },
+  }));
+
+  // La vista previa de genreChecks recorre selected con x-for y envía un input oculto por
+  // género en ese orden; quitar desde ella es solo sacar el id del array.
+  Alpine.data("genreChecks", () => ({
+    ...limitedChecks(),
+    genres: [], // [{id, name}] con el id como texto
+
+    init() {
+      this.genres = JSON.parse(this.$el.dataset.genres);
+      this.initLimit(this.genres.map((g) => g.id));
     },
 
     nameOf(id) {
@@ -56,13 +83,6 @@ document.addEventListener("alpine:init", () => {
           : options.querySelector(`input[value="${id}"]`);
         target?.focus();
       });
-    },
-
-    // resync vuelve a aplicar selected a las casillas. Se llama en pageshow: al volver con
-    // «Atrás», el navegador puede restaurar casillas marcadas sin pasar por x-model
-    // (autocomplete="off" lo evita en la mayoría de los casos; esto cubre el resto).
-    resync() {
-      this.selected = [...this.selected];
     },
   }));
 });

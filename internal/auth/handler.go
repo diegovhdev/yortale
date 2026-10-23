@@ -153,3 +153,46 @@ func (h *Handler) startSession(w http.ResponseWriter, r *http.Request, userID in
 	SetSessionCookie(w, token, expires, h.secureCookies)
 	return nil
 }
+
+// ---------- Perfil ----------
+
+// GET /settings/profile
+func (h *Handler) ShowProfileSettings(w http.ResponseWriter, r *http.Request) {
+	user := CurrentUser(r.Context())
+	httpx.Render(w, r, http.StatusOK, ProfileSettingsPage(newProfileForm(*user)))
+}
+
+// POST /settings/profile
+func (h *Handler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "Formulario inválido", http.StatusBadRequest)
+		return
+	}
+	user := CurrentUser(r.Context())
+	form := newProfileForm(*user)
+	form.DisplayName = r.PostFormValue("display_name")
+	form.Bio = r.PostFormValue("bio")
+
+	updated, err := h.auth.UpdateProfile(r.Context(), user.ID, ProfileInput{DisplayName: form.DisplayName, Bio: form.Bio})
+	var verrs ValidationErrors
+	switch {
+	case errors.As(err, &verrs):
+		form.Errors = verrs
+		h.renderProfile(w, r, http.StatusUnprocessableEntity, form)
+		return
+	case err != nil:
+		slog.Error("actualizar perfil", "err", err, "user_id", user.ID)
+		form.General = genericError
+		h.renderProfile(w, r, http.StatusInternalServerError, form)
+		return
+	}
+	httpx.Redirect(w, r, updated.ProfileURL())
+}
+
+func (h *Handler) renderProfile(w http.ResponseWriter, r *http.Request, status int, form ProfileForm) {
+	if httpx.IsHTMX(r) {
+		httpx.Render(w, r, status, ProfileFormFragment(form))
+		return
+	}
+	httpx.Render(w, r, status, ProfileSettingsPage(form))
+}

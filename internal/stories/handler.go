@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -48,10 +49,9 @@ func notFound(w http.ResponseWriter) {
 func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	view := ExploreView{
-		Query:   strings.TrimSpace(q.Get("q")),
-		GenreID: q.Get("genre"),
-		Kind:    q.Get("kind"),
-		Page:    1,
+		Query: strings.TrimSpace(q.Get("q")),
+		Kind:  q.Get("kind"),
+		Page:  1,
 	}
 	if runes := []rune(view.Query); len(runes) > 200 {
 		view.Query = string(runes[:200])
@@ -64,11 +64,15 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 		view.Kind = ""
 	}
 	filter := ExploreFilter{Query: view.Query, Kind: view.Kind, Page: view.Page}
-	if id, err := strconv.ParseInt(view.GenreID, 10, 16); err == nil {
-		genreID := int16(id)
-		filter.GenreID = &genreID
-	} else {
-		view.GenreID = ""
+	// Es un filtro y no un formulario que se guarda, así que los valores raros se ignoran en vez
+	// de dar error: ids que no son números, repetidos y los que pasan de maxGenres.
+	for _, raw := range q["genre"] {
+		id, err := strconv.ParseInt(raw, 10, 16)
+		if err != nil || slices.Contains(filter.GenreIDs, int16(id)) || len(filter.GenreIDs) == maxGenres {
+			continue
+		}
+		filter.GenreIDs = append(filter.GenreIDs, int16(id))
+		view.GenreIDs = append(view.GenreIDs, strconv.Itoa(int(id)))
 	}
 
 	var err error
@@ -91,7 +95,25 @@ func (h *Handler) MyStories(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, "listar mis historias")
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, MyStoriesPage(stories))
+	httpx.Render(w, r, http.StatusOK, MyStoriesPage(user, stories))
+}
+
+// ---------- Perfil del autor ----------
+
+// GET /users/{username}
+func (h *Handler) AuthorProfile(w http.ResponseWriter, r *http.Request) {
+	view, err := h.stories.AuthorPage(r.Context(), auth.CurrentUser(r.Context()), r.PathValue("username"))
+	if err != nil {
+		fail(w, err, "mostrar perfil del autor")
+		return
+	}
+	// El username no distingue mayúsculas (citext); si se escribió distinto, se redirige
+	// a la forma guardada para que cada perfil tenga una sola URL.
+	if r.PathValue("username") != view.Author.Username {
+		http.Redirect(w, r, view.Author.ProfileURL(), http.StatusMovedPermanently)
+		return
+	}
+	httpx.Render(w, r, http.StatusOK, AuthorPage(view))
 }
 
 // ---------- Ver ----------

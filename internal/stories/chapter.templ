@@ -5,7 +5,10 @@ import "github.com/diegovhdev/yortale/web/components"
 templ ChapterPage(v ChapterView) {
 	@components.Layout(v.Chapter.Title + " · " + v.Story.Title) {
 		<article class="chapter">
-			<p><a href={ templ.URL(v.Story.URL()) }>{ v.Story.Title }</a>, por { v.Story.AuthorName }</p>
+			<p>
+				<a href={ templ.URL(v.Story.URL()) }>{ v.Story.Title }</a>, por{ " " }
+				@authorLink(v.Story, false)
+			</p>
 			<h1>{ v.Chapter.Title }</h1>
 			if !v.Chapter.IsPublished {
 				<p class="notice">Este capítulo es un borrador: solo tú puedes verlo.</p>

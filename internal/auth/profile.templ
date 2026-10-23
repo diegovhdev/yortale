@@ -1,0 +1,55 @@
+package auth
+
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+templ ProfileSettingsPage(f ProfileForm) {
+	@components.Layout("Editar perfil") {
+		<h1>Editar perfil</h1>
+		<p>Esto es lo que verán los lectores en <a href={ templ.URL(f.ProfileURL) }>tu perfil público</a>.</p>
+		@ProfileFormFragment(f)
+	}
+}
+
+// ProfileFormFragment es solo el formulario; htmx lo reemplaza completo si hay errores.
+templ ProfileFormFragment(f ProfileForm) {
+	<form
+		id="profile-form"
+		action="/settings/profile"
+		method="post"
+		hx-post="/settings/profile"
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Field(components.FieldProps{
+			Label:        "Nombre para mostrar (opcional; si lo dejas vacío se usa tu nombre de usuario)",
+			Name:         "display_name",
+			Type:         "text",
+			Value:        f.DisplayName,
+			Error:        f.Errors["display_name"],
+			Autocomplete: "nickname",
+			Attrs:        templ.Attributes{"maxlength": strconv.Itoa(maxDisplayNameRunes)},
+		})
+		@components.TextArea(components.FieldProps{
+			Label: "Descripción breve",
+			Name:  "bio",
+			Value: f.Bio,
+			Error: f.Errors["bio"],
+			Attrs: templ.Attributes{
+				"rows":        "5",
+				"maxlength":   strconv.Itoa(maxBioRunes),
+				"placeholder": "Cuéntales a los lectores quién eres y qué te gusta escribir.",
+			},
+		})
+		<button type="submit">Guardar perfil</button>
+		<a href={ templ.URL(f.ProfileURL) }>Cancelar</a>
+		<span class="htmx-indicator">Guardando…</span>
+	</form>
+}

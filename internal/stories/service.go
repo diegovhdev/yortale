@@ -24,8 +24,9 @@ type storyStore interface {
 	Create(ctx context.Context, p StoryParams) (Story, error)
 	Update(ctx context.Context, id int64, p StoryParams) (Story, error)
 	Get(ctx context.Context, id int64) (Story, error)
-	ListPublished(ctx context.Context, query string, genreID *int16, kind string, limit, offset int) ([]Story, error)
+	ListPublished(ctx context.Context, query string, genreIDs []int16, kind string, limit, offset int) ([]Story, error)
 	ListByAuthor(ctx context.Context, authorID int64) ([]Story, error)
+	ListPublishedByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 	Delete(ctx context.Context, id, authorID int64) error
 	ListGenres(ctx context.Context) ([]Genre, error)
 	RecordRead(ctx context.Context, userID, storyID, chapterID int64) error
@@ -40,13 +41,19 @@ type chapterStore interface {
 	Move(ctx context.Context, id int64, delta int) error
 }
 
+// authorStore busca a los autores para su perfil público. Lo cumple *auth.Service.
+type authorStore interface {
+	UserByUsername(ctx context.Context, username string) (auth.User, error)
+}
+
 type Service struct {
 	stories  storyStore
 	chapters chapterStore
+	authors  authorStore
 }
 
-func NewService(stories storyStore, chapters chapterStore) *Service {
-	return &Service{stories: stories, chapters: chapters}
+func NewService(stories storyStore, chapters chapterStore, authors authorStore) *Service {
+	return &Service{stories: stories, chapters: chapters, authors: authors}
 }
 
 func isAuthor(user *auth.User, s Story) bool {
@@ -275,10 +282,10 @@ func (s *Service) ByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 
 // ExploreFilter son los parámetros de la página de explorar.
 type ExploreFilter struct {
-	Query   string
-	GenreID *int16
-	Kind    string // "" para todos los tipos
-	Page    int    // empieza en 1
+	Query    string
+	GenreIDs []int16 // la historia debe tener todos, en cualquier orden; vacío no filtra
+	Kind     string  // "" para todos los tipos
+	Page     int     // empieza en 1
 }
 
 func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story, hasNext bool, err error) {
@@ -286,7 +293,7 @@ func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story
 		f.Page = 1
 	}
 	// Se pide uno de más para saber si hay página siguiente.
-	stories, err = s.stories.ListPublished(ctx, f.Query, f.GenreID, f.Kind, explorePageSize+1, (f.Page-1)*explorePageSize)
+	stories, err = s.stories.ListPublished(ctx, f.Query, f.GenreIDs, f.Kind, explorePageSize+1, (f.Page-1)*explorePageSize)
 	if err != nil {
 		return nil, false, err
 	}
@@ -294,6 +301,30 @@ func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story
 		return stories[:explorePageSize], true, nil
 	}
 	return stories, false, nil
+}
+
+// ---------- Perfil del autor ----------
+
+// AuthorPage reúne lo que muestra el perfil público de un autor: sus datos y sus historias
+// publicadas (los borradores no salen, ni siquiera para el propio autor, porque es la vista
+// pública; los suyos los ve en «Mis historias»).
+func (s *Service) AuthorPage(ctx context.Context, viewer *auth.User, username string) (AuthorView, error) {
+	author, err := s.authors.UserByUsername(ctx, username)
+	if errors.Is(err, auth.ErrNotFound) {
+		return AuthorView{}, ErrNotFound
+	}
+	if err != nil {
+		return AuthorView{}, err
+	}
+	stories, err := s.stories.ListPublishedByAuthor(ctx, author.ID)
+	if err != nil {
+		return AuthorView{}, err
+	}
+	v := AuthorView{Author: author, Stories: stories, IsOwner: viewer != nil && viewer.ID == author.ID}
+	for _, st := range stories {
+		v.TotalReads += st.ReadsCount
+	}
+	return v, nil
 }
 
 // ---------- Capítulos ----------

@@ -50,7 +50,7 @@ func ChapterPage(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var3 templ.SafeURL
 			templ_7745c5c3_Var3, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.Story.URL()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 8, Col: 40}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 9, Col: 38}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 			if templ_7745c5c3_Err != nil {
@@ -63,22 +63,26 @@ func ChapterPage(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(v.Story.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 8, Col: 58}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 9, Col: 56}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</a>, por ")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</a>, por")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var5 string
-			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(v.Story.AuthorName)
+			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(" ")
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 8, Col: 90}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 9, Col: 72}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
+			if templ_7745c5c3_Err != nil {
+				return templ_7745c5c3_Err
+			}
+			templ_7745c5c3_Err = authorLink(v.Story, false).Render(ctx, templ_7745c5c3_Buffer)
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
@@ -89,7 +93,7 @@ func ChapterPage(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var6 string
 			templ_7745c5c3_Var6, templ_7745c5c3_Err = templ.JoinStringErrs(v.Chapter.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 9, Col: 24}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 12, Col: 24}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var6))
 			if templ_7745c5c3_Err != nil {
@@ -113,7 +117,7 @@ func ChapterPage(v ChapterView) templ.Component {
 				var templ_7745c5c3_Var7 templ.SafeURL
 				templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.Chapter.EditURL()))
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 14, Col: 63}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 17, Col: 63}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var7))
 				if templ_7745c5c3_Err != nil {
@@ -136,7 +140,7 @@ func ChapterPage(v ChapterView) templ.Component {
 				var templ_7745c5c3_Var8 string
 				templ_7745c5c3_Var8, templ_7745c5c3_Err = templ.JoinStringErrs(p)
 				if templ_7745c5c3_Err != nil {
-					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 18, Col: 11}
+					return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 21, Col: 11}
 				}
 				_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var8))
 				if templ_7745c5c3_Err != nil {
@@ -202,7 +206,7 @@ func chapterNav(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var10 templ.SafeURL
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.Prev.URL(v.Story)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 29, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 32, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {
@@ -215,7 +219,7 @@ func chapterNav(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var11 string
 			templ_7745c5c3_Var11, templ_7745c5c3_Err = templ.JoinStringErrs(v.Prev.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 29, Col: 75}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 32, Col: 75}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var11))
 			if templ_7745c5c3_Err != nil {
@@ -233,7 +237,7 @@ func chapterNav(v ChapterView) templ.Component {
 		var templ_7745c5c3_Var12 templ.SafeURL
 		templ_7745c5c3_Var12, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.Story.URL()))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 31, Col: 36}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 34, Col: 36}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var12))
 		if templ_7745c5c3_Err != nil {
@@ -251,7 +255,7 @@ func chapterNav(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var13 templ.SafeURL
 			templ_7745c5c3_Var13, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(v.Next.URL(v.Story)))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 33, Col: 43}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 36, Col: 43}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var13))
 			if templ_7745c5c3_Err != nil {
@@ -264,7 +268,7 @@ func chapterNav(v ChapterView) templ.Component {
 			var templ_7745c5c3_Var14 string
 			templ_7745c5c3_Var14, templ_7745c5c3_Err = templ.JoinStringErrs(v.Next.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 33, Col: 71}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 36, Col: 71}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var14))
 			if templ_7745c5c3_Err != nil {
@@ -323,7 +327,7 @@ func ChapterFormPage(f ChapterForm) templ.Component {
 			var templ_7745c5c3_Var17 string
 			templ_7745c5c3_Var17, templ_7745c5c3_Err = templ.JoinStringErrs(chapterFormTitle(f))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 40, Col: 27}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 43, Col: 27}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var17))
 			if templ_7745c5c3_Err != nil {
@@ -336,7 +340,7 @@ func ChapterFormPage(f ChapterForm) templ.Component {
 			var templ_7745c5c3_Var18 templ.SafeURL
 			templ_7745c5c3_Var18, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(f.Story.URL()))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 41, Col: 49}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 44, Col: 49}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var18))
 			if templ_7745c5c3_Err != nil {
@@ -349,7 +353,7 @@ func ChapterFormPage(f ChapterForm) templ.Component {
 			var templ_7745c5c3_Var19 string
 			templ_7745c5c3_Var19, templ_7745c5c3_Err = templ.JoinStringErrs(f.Story.Title)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 41, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 44, Col: 67}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var19))
 			if templ_7745c5c3_Err != nil {
@@ -401,7 +405,7 @@ func ChapterFormFragment(f ChapterForm) templ.Component {
 		var templ_7745c5c3_Var21 templ.SafeURL
 		templ_7745c5c3_Var21, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(f.Action))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 49, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 52, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var21))
 		if templ_7745c5c3_Err != nil {
@@ -414,7 +418,7 @@ func ChapterFormFragment(f ChapterForm) templ.Component {
 		var templ_7745c5c3_Var22 string
 		templ_7745c5c3_Var22, templ_7745c5c3_Err = templ.ResolveAttributeValue(f.Action)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 51, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 54, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var22)
 		if templ_7745c5c3_Err != nil {
@@ -432,7 +436,7 @@ func ChapterFormFragment(f ChapterForm) templ.Component {
 			var templ_7745c5c3_Var23 string
 			templ_7745c5c3_Var23, templ_7745c5c3_Err = templ.JoinStringErrs(f.General)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 57, Col: 44}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 60, Col: 44}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var23))
 			if templ_7745c5c3_Err != nil {
@@ -498,7 +502,7 @@ func ChapterFormFragment(f ChapterForm) templ.Component {
 		var templ_7745c5c3_Var24 templ.SafeURL
 		templ_7745c5c3_Var24, templ_7745c5c3_Err = templ.JoinURLErrs(templ.URL(f.CancelURL))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 90, Col: 34}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/stories/chapter.templ`, Line: 93, Col: 34}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var24))
 		if templ_7745c5c3_Err != nil {

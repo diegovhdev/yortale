@@ -10,6 +10,23 @@ type RegisterForm struct {
 	General     string            // error que no pertenece a un campo concreto
 }
 
+// ProfileForm es el formulario para editar el perfil propio.
+type ProfileForm struct {
+	ProfileURL  string // perfil público, para enlazarlo desde la página
+	DisplayName string
+	Bio         string
+	Errors      map[string]string
+	General     string
+}
+
+func newProfileForm(u User) ProfileForm {
+	f := ProfileForm{ProfileURL: u.ProfileURL(), Bio: u.Bio}
+	if u.DisplayName != nil {
+		f.DisplayName = *u.DisplayName
+	}
+	return f
+}
+
 type LoginForm struct {
 	Login   string
 	Next    string // ruta a la que volver tras iniciar sesión; siempre pasa por SafeNext
