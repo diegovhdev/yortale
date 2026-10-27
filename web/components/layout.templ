@@ -1,5 +1,7 @@
 package components
 
+import "github.com/diegovhdev/yortale/web"
+
 // Layout es la estructura HTML común a todas las páginas.
 // Los scripts con componentes de Alpine (Alpine.data) van antes que alpine.min.js: se
 // registran en el evento alpine:init, y defer los ejecuta en el orden en que aparecen.
@@ -10,10 +12,13 @@ templ Layout(title string) {
 			<meta charset="utf-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1"/>
 			<title>{ title } · YorTale</title>
-			<link rel="stylesheet" href="/static/css/app.css"/>
-			<script src="/static/js/htmx.min.js" defer></script>
-			<script src="/static/js/genre-checks.js" defer></script>
-			<script src="/static/js/alpine.min.js" defer></script>
+			<meta name="color-scheme" content="dark"/>
+			<link rel="stylesheet" href={ web.Asset("css/themes.css") }/>
+			<link rel="stylesheet" href={ web.Asset("css/global.css") }/>
+			<link rel="stylesheet" href={ web.Asset("css/app.css") }/>
+			<script src={ web.Asset("js/htmx.min.js") } defer></script>
+			<script src={ web.Asset("js/genre-checks.js") } defer></script>
+			<script src={ web.Asset("js/alpine.min.js") } defer></script>
 		</head>
 		<body>
 			<header>

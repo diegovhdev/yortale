@@ -2,7 +2,6 @@
 package server
 
 import (
-	"io/fs"
 	"net/http"
 
 	"github.com/diegovhdev/yortale/internal/auth"
@@ -26,10 +25,6 @@ func NewRouter(d Deps) http.Handler {
 
 	// member envuelve las rutas que exigen sesión iniciada.
 	member := func(h http.HandlerFunc) http.Handler { return auth.RequireUser(h) }
-
-	// Archivos estáticos (css, js) incluidos dentro del binario con go:embed.
-	static, _ := fs.Sub(web.StaticFS, "static")
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServerFS(static)))
 
 	mux.HandleFunc("GET /{$}", home.Home)
 
@@ -78,9 +73,14 @@ func NewRouter(d Deps) http.Handler {
 	}))
 
 	// El orden importa: Logger envuelve todo, luego la protección CSRF y luego la sesión.
-	var h http.Handler = mux
-	h = auth.LoadUser(d.Auth, d.SecureCookies)(h)
-	h = csrf.Handler(h)
-	h = middleware.Logger(h)
-	return h
+	var app http.Handler = mux
+	app = auth.LoadUser(d.Auth, d.SecureCookies)(app)
+	app = csrf.Handler(app)
+
+	// Los archivos estáticos (css, js, incluidos en el binario con go:embed) van aparte para no
+	// pasar por LoadUser: si no, cada archivo costaría una consulta de sesión a la base de datos.
+	root := http.NewServeMux()
+	root.Handle("GET /static/", http.StripPrefix("/static/", web.StaticHandler()))
+	root.Handle("/", app)
+	return middleware.Logger(root)
 }

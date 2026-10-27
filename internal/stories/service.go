@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 	"unicode/utf8"
 
 	"github.com/diegovhdev/yortale/internal/auth"
@@ -18,6 +20,9 @@ const (
 	maxChapterRunes = 200_000
 	// maxSlugAttempts limita cuántos sufijos (-2, -3...) se prueban si el autor repite título.
 	maxSlugAttempts = 50
+	// genresTTL es cuánto se guardan en memoria los géneros. Solo cambian a mano en la base
+	// de datos, así que con esto un cambio se ve en unos minutos sin reiniciar el servidor.
+	genresTTL = 10 * time.Minute
 )
 
 type storyStore interface {
@@ -34,6 +39,7 @@ type storyStore interface {
 
 type chapterStore interface {
 	ListByStory(ctx context.Context, storyID int64, includeDrafts bool) ([]Chapter, error)
+	ListForReading(ctx context.Context, storyID, chapterID int64, includeDrafts bool) ([]Chapter, error)
 	Get(ctx context.Context, id int64) (Chapter, error)
 	Create(ctx context.Context, storyID int64, p ChapterParams) (Chapter, error)
 	Update(ctx context.Context, id int64, p ChapterParams) (Chapter, error)
@@ -50,6 +56,10 @@ type Service struct {
 	stories  storyStore
 	chapters chapterStore
 	authors  authorStore
+
+	genresMu      sync.Mutex
+	genres        []Genre
+	genresExpires time.Time
 }
 
 func NewService(stories storyStore, chapters chapterStore, authors authorStore) *Service {
@@ -73,8 +83,19 @@ type StoryInput struct {
 	Status        string // se ignora al crear: toda historia empieza como borrador
 }
 
+// Genres devuelve todos los géneros, desde la memoria mientras no pase genresTTL.
+// Cada llamada recibe su propia copia, así que puede modificarla.
 func (s *Service) Genres(ctx context.Context) ([]Genre, error) {
-	return s.stories.ListGenres(ctx)
+	s.genresMu.Lock()
+	defer s.genresMu.Unlock()
+	if s.genres == nil || time.Now().After(s.genresExpires) {
+		genres, err := s.stories.ListGenres(ctx)
+		if err != nil {
+			return nil, err
+		}
+		s.genres, s.genresExpires = genres, time.Now().Add(genresTTL)
+	}
+	return slices.Clone(s.genres), nil
 }
 
 // Create valida los datos y crea la historia como borrador. Devuelve auth.ValidationErrors si hay errores.
@@ -199,7 +220,7 @@ func (s *Service) validateGenres(ctx context.Context, ids []string, p *StoryPara
 			continue
 		}
 		if genres == nil {
-			if genres, err = s.stories.ListGenres(ctx); err != nil {
+			if genres, err = s.Genres(ctx); err != nil {
 				return err
 			}
 		}
@@ -429,30 +450,24 @@ func (s *Service) ReadChapter(ctx context.Context, viewer *auth.User, storyID, c
 	if err != nil {
 		return ChapterView{}, err
 	}
-	c, err := s.chapters.Get(ctx, chapterID)
+	author := isAuthor(viewer, story)
+	// Una sola consulta trae el índice y el texto del capítulo pedido. Si el capítulo es de
+	// otra historia, o es un borrador y no lo pide el autor, no está en la lista.
+	chapters, err := s.chapters.ListForReading(ctx, story.ID, chapterID, author)
 	if err != nil {
 		return ChapterView{}, err
 	}
-	author := isAuthor(viewer, story)
-	if c.StoryID != story.ID || (!c.IsPublished && !author) {
+	i := slices.IndexFunc(chapters, func(c Chapter) bool { return c.ID == chapterID })
+	if i < 0 {
 		return ChapterView{}, ErrNotFound
 	}
-
-	chapters, err := s.chapters.ListByStory(ctx, story.ID, author)
-	if err != nil {
-		return ChapterView{}, err
-	}
+	c := chapters[i]
 	v := ChapterView{Story: story, Chapter: c, IsAuthor: author}
-	for i, other := range chapters {
-		if other.ID != c.ID {
-			continue
-		}
-		if i > 0 {
-			v.Prev = &chapters[i-1]
-		}
-		if i < len(chapters)-1 {
-			v.Next = &chapters[i+1]
-		}
+	if i > 0 {
+		v.Prev = &chapters[i-1]
+	}
+	if i < len(chapters)-1 {
+		v.Next = &chapters[i+1]
 	}
 
 	if viewer != nil && !author && c.IsPublished {
