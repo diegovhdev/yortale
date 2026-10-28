@@ -97,7 +97,8 @@ func TestStoriesIntegration(t *testing.T) {
 		}
 	}
 	in := StoryInput{Title: "El Último Dragón", Synopsis: "Un dragón\r\nque vuela.", Kind: KindFanfic, Language: "es", ContentRating: "general",
-		GenreIDs: []string{"3", "", "1"}} // Ciencia ficción y Fantasía; el hueco se cierra
+		GenreIDs: []string{"3", "", "1"},                   // Ciencia ficción y Fantasía; el hueco se cierra
+		Warnings: []string{"declined", "graphic_violence"}} // se guardan en el orden de ContentWarnings
 
 	genreIDs := func(s Story) []int16 {
 		ids := make([]int16, len(s.Genres))
@@ -110,7 +111,8 @@ func TestStoriesIntegration(t *testing.T) {
 	// Crear: borrador, slug sin acentos, y sufijo si el autor repite título.
 	story, err := svc.Create(ctx, author.ID, in)
 	must(err)
-	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.Kind != KindFanfic || !slices.Equal(genreIDs(story), []int16{3, 1}) || story.Synopsis != "Un dragón\nque vuela." {
+	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.Kind != KindFanfic || !slices.Equal(genreIDs(story), []int16{3, 1}) || story.Synopsis != "Un dragón\nque vuela." ||
+		!slices.Equal(story.Warnings, []string{"graphic_violence", WarningDeclined}) {
 		t.Fatalf("historia creada inesperada: %+v", story)
 	}
 	twin, err := svc.Create(ctx, author.ID, in)
@@ -130,6 +132,20 @@ func TestStoriesIntegration(t *testing.T) {
 	tooMany.GenreIDs = []string{"1", "2", "3", "4"}
 	if _, err := svc.Create(ctx, author.ID, tooMany); !errors.As(err, &verrs) || verrs["genres"] == "" {
 		t.Fatalf("se esperaba error por más de %d géneros, llegó %v", maxGenres, err)
+	}
+	for _, tc := range []struct {
+		name     string
+		warnings []string
+	}{
+		{"sin advertencias", nil},
+		{"una que no existe", []string{"gore"}},
+		{"none con otra", []string{WarningNone, "graphic_violence"}},
+	} {
+		bad := in
+		bad.Warnings = tc.warnings
+		if _, err := svc.Create(ctx, author.ID, bad); !errors.As(err, &verrs) || verrs["warnings"] == "" {
+			t.Fatalf("advertencias %s: se esperaba error, llegó %v", tc.name, err)
+		}
 	}
 	in.Status = "ongoing"
 	if _, err := svc.Update(ctx, author.ID, story.ID, in); !errors.As(err, &verrs) || verrs["status"] == "" {
@@ -191,6 +207,104 @@ func TestStoriesIntegration(t *testing.T) {
 	}
 	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindFanfic, GenreIDs: second}); err != nil || len(found) != 1 {
 		t.Fatalf("el filtro de tipo y género no encontró la historia: %v %v", found, err)
+	}
+
+	// Ocultar advertencias: la historia tiene violencia gráfica y «prefiere no advertir».
+	for _, tc := range []struct {
+		exclude []string
+		want    int
+	}{
+		{[]string{"sexual_violence"}, 1},
+		{[]string{"graphic_violence"}, 0},
+		{[]string{"major_character_death", WarningDeclined}, 0},
+	} {
+		if found, _, err := svc.Explore(ctx, ExploreFilter{ExcludeWarnings: tc.exclude}); err != nil || len(found) != tc.want {
+			t.Fatalf("ocultar %v: %d historias, se esperaban %d (%v)", tc.exclude, len(found), tc.want, err)
+		}
+	}
+
+	// Tags: un valor por tag o varios separados por comas; se identifican por el slug, así que
+	// no se repiten aunque cambien las mayúsculas, las tildes o la puntuación.
+	in.Status = "ongoing"
+	in.Tags = []string{"Época Victoriana, slow burn", "#Slow-Burn", "  enemigos   a amantes "}
+	story, err = svc.Update(ctx, author.ID, story.ID, in)
+	must(err)
+	wantTags := []Tag{
+		{Name: "Época Victoriana", Slug: "epoca-victoriana"},
+		{Name: "slow burn", Slug: "slow-burn"},
+		{Name: "enemigos a amantes", Slug: "enemigos-a-amantes"},
+	}
+	if !slices.Equal(story.Tags, wantTags) {
+		t.Fatalf("tags guardados = %+v, se esperaba %+v", story.Tags, wantTags)
+	}
+	// Otra historia reutiliza el tag existente, que conserva el nombre de quien lo creó.
+	twinIn := in
+	twinIn.Status = StatusDraft
+	twinIn.Tags = []string{"EPOCA VICTORIANA", "Otro"}
+	twin, err = svc.Update(ctx, author.ID, twin.ID, twinIn)
+	must(err)
+	if len(twin.Tags) != 2 || twin.Tags[0] != wantTags[0] {
+		t.Fatalf("no se reutilizó el tag: %+v", twin.Tags)
+	}
+	var tagCount int
+	must(pool.QueryRow(ctx, `SELECT count(*) FROM tags`).Scan(&tagCount))
+	if tagCount != 4 {
+		t.Fatalf("hay %d tags, se esperaban 4", tagCount)
+	}
+	tooManyTags := make([]string, maxTags+1)
+	for i := range tooManyTags {
+		tooManyTags[i] = fmt.Sprintf("tag %d", i)
+	}
+	for _, tc := range []struct {
+		name string
+		tags []string
+	}{
+		{"demasiados", tooManyTags},
+		{"demasiado largo", []string{strings.Repeat("a", maxTagRunes+1)}},
+		{"sin letras ni números", []string{"!!!"}},
+	} {
+		bad := in
+		bad.Tags = tc.tags
+		if _, err := svc.Update(ctx, author.ID, story.ID, bad); !errors.As(err, &verrs) || verrs["tags"] == "" {
+			t.Fatalf("tags %s: se esperaba error, llegó %v", tc.name, err)
+		}
+	}
+
+	// Filtros de tags en explorar. La gemela es borrador, así que no sale.
+	for _, tc := range []struct {
+		tags, exclude []string
+		want          int
+	}{
+		{[]string{"epoca-victoriana"}, nil, 1},
+		{[]string{"epoca-victoriana", "slow-burn"}, nil, 1},
+		{[]string{"epoca-victoriana", "otro"}, nil, 0},
+		{nil, []string{"slow-burn"}, 0},
+		{nil, []string{"otro"}, 1},
+	} {
+		found, _, err := svc.Explore(ctx, ExploreFilter{Tags: tc.tags, ExcludeTags: tc.exclude})
+		if err != nil || len(found) != tc.want {
+			t.Fatalf("tags %v sin %v: %d historias, se esperaban %d (%v)", tc.tags, tc.exclude, len(found), tc.want, err)
+		}
+	}
+
+	// Página del tag: solo cuenta y lista las historias publicadas.
+	tagView, err := svc.TagPage(ctx, "epoca-victoriana", 1)
+	must(err)
+	if tagView.Tag.Name != "Época Victoriana" || tagView.Tag.Uses != 1 || len(tagView.Stories) != 1 {
+		t.Fatalf("página del tag inesperada: %+v", tagView)
+	}
+	if _, err := svc.TagPage(ctx, "no-existe", 1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("un tag inexistente debería dar ErrNotFound, llegó %v", err)
+	}
+
+	// Sugerencias: por el principio del slug, sin importar tildes ni mayúsculas.
+	suggested, err := svc.SuggestTags(ctx, "ÉPOCA")
+	must(err)
+	if len(suggested) == 0 || suggested[0].Name != "Época Victoriana" || suggested[0].Uses != 1 {
+		t.Fatalf("sugerencias para «ÉPOCA» = %+v", suggested)
+	}
+	if suggested, err := svc.SuggestTags(ctx, "!!!"); err != nil || len(suggested) != 0 {
+		t.Fatalf("sugerencias para «!!!» = %+v (%v)", suggested, err)
 	}
 
 	// Leer: el lector no ve el borrador; leer cuenta una sola vez por lector.

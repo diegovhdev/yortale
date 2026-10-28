@@ -17,7 +17,11 @@ import (
 
 const (
 	explorePageSize = 20
-	maxChapterRunes = 200_000
+	// maxFilterTags limita cuántos tags se usan en cada filtro de explorar (incluir y excluir).
+	maxFilterTags = 10
+	// maxTagSuggestions es cuántas sugerencias se ofrecen mientras el autor escribe un tag.
+	maxTagSuggestions = 10
+	maxChapterRunes   = 200_000
 	// maxSlugAttempts limita cuántos sufijos (-2, -3...) se prueban si el autor repite título.
 	maxSlugAttempts = 50
 	// genresTTL es cuánto se guardan en memoria los géneros. Solo cambian a mano en la base
@@ -29,11 +33,13 @@ type storyStore interface {
 	Create(ctx context.Context, p StoryParams) (Story, error)
 	Update(ctx context.Context, id int64, p StoryParams) (Story, error)
 	Get(ctx context.Context, id int64) (Story, error)
-	ListPublished(ctx context.Context, query string, genreIDs []int16, kind string, limit, offset int) ([]Story, error)
+	ListPublished(ctx context.Context, f ExploreFilter, limit, offset int) ([]Story, error)
 	ListByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 	ListPublishedByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 	Delete(ctx context.Context, id, authorID int64) error
 	ListGenres(ctx context.Context) ([]Genre, error)
+	GetTag(ctx context.Context, slug string) (Tag, error)
+	SuggestTags(ctx context.Context, slug string, limit int) ([]Tag, error)
 	RecordRead(ctx context.Context, userID, storyID, chapterID int64) error
 }
 
@@ -80,7 +86,9 @@ type StoryInput struct {
 	GenreIDs      []string // en el orden en que se muestran; los vacíos se ignoran
 	Language      string
 	ContentRating string
-	Status        string // se ignora al crear: toda historia empieza como borrador
+	Warnings      []string
+	Tags          []string // nombres, uno por valor o varios separados por comas
+	Status        string   // se ignora al crear: toda historia empieza como borrador
 }
 
 // Genres devuelve todos los géneros, desde la memoria mientras no pase genresTTL.
@@ -195,6 +203,8 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 		errs["status"] = "Elige un estado de la lista."
 	}
 
+	validateWarnings(in.Warnings, &p, errs)
+	validateTags(in.Tags, &p, errs)
 	if err := s.validateGenres(ctx, in.GenreIDs, &p, errs); err != nil {
 		return StoryParams{}, err
 	}
@@ -238,6 +248,85 @@ func (s *Service) validateGenres(ctx context.Context, ids []string, p *StoryPara
 		errs[genresField] = fmt.Sprintf("Elige como máximo %d géneros.", maxGenres)
 	}
 	return nil
+}
+
+// validateWarnings pasa a p.Warnings las advertencias marcadas, sin repetir y en el orden de
+// ContentWarnings. Los vacíos se ignoran. Todos los errores van al campo warnings.
+func validateWarnings(values []string, p *StoryParams, errs auth.ValidationErrors) {
+	for _, v := range values {
+		if v != "" && !validWarning(v) {
+			errs[warningsField] = "Elige advertencias de la lista."
+			return
+		}
+	}
+	for _, w := range ContentWarnings {
+		if slices.Contains(values, w.Value) {
+			p.Warnings = append(p.Warnings, w.Value)
+		}
+	}
+	switch {
+	case len(p.Warnings) == 0:
+		errs[warningsField] = "Elige al menos una opción. Si no aplica ninguna advertencia, márcalo."
+	case slices.Contains(p.Warnings, WarningNone) && len(p.Warnings) > 1:
+		errs[warningsField] = "«No aplica ninguna» no se puede combinar con otras advertencias."
+	}
+}
+
+// validateTags pasa a p.Tags los tags del autor, en su orden y sin repetir: si dos dan el
+// mismo slug se queda el primero. Todos los errores van al campo tags.
+func validateTags(values []string, p *StoryParams, errs auth.ValidationErrors) {
+	for _, name := range cleanTagNames(values) {
+		slug := TagSlug(name)
+		switch {
+		case utf8.RuneCountInString(name) > maxTagRunes:
+			errs[tagsField] = fmt.Sprintf("Cada tag puede tener como máximo %d caracteres, y «%s» se pasa.", maxTagRunes, excerpt(name, 30))
+		case slug == "":
+			errs[tagsField] = fmt.Sprintf("«%s» no sirve como tag: necesita al menos una letra o un número.", name)
+		case !hasTag(p.Tags, slug):
+			p.Tags = append(p.Tags, Tag{Name: name, Slug: slug})
+		}
+	}
+	if len(p.Tags) > maxTags {
+		errs[tagsField] = fmt.Sprintf("Puedes poner como máximo %d tags.", maxTags)
+	}
+}
+
+// cleanTagNames separa por comas lo que llega del campo de tags (con JS, un valor por tag;
+// sin JS, todos en un mismo texto) y limpia cada nombre: sin espacios sobrantes ni # delante.
+// Los vacíos se descartan.
+func cleanTagNames(values []string) []string {
+	var names []string
+	for _, v := range values {
+		for part := range strings.SplitSeq(v, ",") {
+			name := strings.Join(strings.Fields(strings.TrimLeft(strings.TrimSpace(part), "#")), " ")
+			if name != "" {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+// tagFilterSlugs convierte el texto de un filtro de tags de explorar en slugs, sin repetir y
+// como mucho maxFilterTags. Es un filtro, así que lo que no sirve se ignora en vez de dar error.
+func tagFilterSlugs(text string) []string {
+	var slugs []string
+	for _, name := range cleanTagNames([]string{text}) {
+		slug := TagSlug(name)
+		if slug != "" && !slices.Contains(slugs, slug) && len(slugs) < maxFilterTags {
+			slugs = append(slugs, slug)
+		}
+	}
+	return slugs
+}
+
+func hasTag(tags []Tag, slug string) bool {
+	for _, t := range tags {
+		if t.Slug == slug {
+			return true
+		}
+	}
+	return false
 }
 
 func hasGenre(genres []Genre, id int16) bool {
@@ -306,7 +395,11 @@ type ExploreFilter struct {
 	Query    string
 	GenreIDs []int16 // la historia debe tener todos, en cualquier orden; vacío no filtra
 	Kind     string  // "" para todos los tipos
-	Page     int     // empieza en 1
+	// ExcludeWarnings oculta las historias que tengan alguna de estas advertencias; vacío no filtra.
+	ExcludeWarnings []string
+	Tags            []string // slugs; la historia debe tenerlos todos
+	ExcludeTags     []string // slugs; la historia no puede tener ninguno
+	Page            int      // empieza en 1
 }
 
 func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story, hasNext bool, err error) {
@@ -314,7 +407,7 @@ func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story
 		f.Page = 1
 	}
 	// Se pide uno de más para saber si hay página siguiente.
-	stories, err = s.stories.ListPublished(ctx, f.Query, f.GenreIDs, f.Kind, explorePageSize+1, (f.Page-1)*explorePageSize)
+	stories, err = s.stories.ListPublished(ctx, f, explorePageSize+1, (f.Page-1)*explorePageSize)
 	if err != nil {
 		return nil, false, err
 	}
@@ -322,6 +415,33 @@ func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story
 		return stories[:explorePageSize], true, nil
 	}
 	return stories, false, nil
+}
+
+// ---------- Tags ----------
+
+// TagPage es la página de un tag: el tag y una página de sus historias publicadas.
+// Devuelve ErrNotFound si no existe ningún tag con ese slug.
+func (s *Service) TagPage(ctx context.Context, slug string, page int) (TagView, error) {
+	tag, err := s.stories.GetTag(ctx, slug)
+	if err != nil {
+		return TagView{}, err
+	}
+	v := TagView{Tag: tag, Page: max(page, 1)}
+	v.Stories, v.HasNext, err = s.Explore(ctx, ExploreFilter{Tags: []string{tag.Slug}, Page: v.Page})
+	if err != nil {
+		return TagView{}, err
+	}
+	return v, nil
+}
+
+// SuggestTags devuelve tags que se parecen a lo que el autor está escribiendo, los más
+// usados primero. Sin letras ni números no hay nada que buscar.
+func (s *Service) SuggestTags(ctx context.Context, query string) ([]Tag, error) {
+	slug := TagSlug(query)
+	if slug == "" {
+		return []Tag{}, nil
+	}
+	return s.stories.SuggestTags(ctx, slug, maxTagSuggestions)
 }
 
 // ---------- Perfil del autor ----------

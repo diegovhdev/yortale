@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strconv"
+	"strings"
 )
 
 // StoryForm guarda lo que el autor escribió y los errores, para volver a mostrar el formulario.
@@ -19,6 +20,8 @@ type StoryForm struct {
 	GenreIDs      []string // ids marcados, en orden: el de marcado con JS, alfabético sin JS
 	Language      string
 	ContentRating string
+	Warnings      []string // al crear empieza vacío, para que el autor tenga que elegir
+	Tags          []string // tal como llegan: un valor por tag con JS, un texto con comas sin JS
 	Status        string
 	Genres        []Genre
 	Errors        map[string]string // error por campo, por ejemplo Errors["title"]
@@ -47,11 +50,15 @@ func editStoryForm(s Story, genres []Genre) StoryForm {
 		Kind:          s.Kind,
 		Language:      s.Language,
 		ContentRating: s.ContentRating,
+		Warnings:      s.Warnings,
 		Status:        s.Status,
 		Genres:        genres,
 	}
 	for _, g := range s.Genres {
 		f.GenreIDs = append(f.GenreIDs, strconv.Itoa(int(g.ID)))
+	}
+	for _, t := range s.Tags {
+		f.Tags = append(f.Tags, t.Name)
 	}
 	return f
 }
@@ -64,6 +71,8 @@ func (f StoryForm) Input() StoryInput {
 		GenreIDs:      f.GenreIDs,
 		Language:      f.Language,
 		ContentRating: f.ContentRating,
+		Warnings:      f.Warnings,
+		Tags:          f.Tags,
 		Status:        f.Status,
 	}
 }
@@ -74,6 +83,41 @@ const genresField = "genres"
 // HasGenre dice si el género está marcado en el formulario.
 func (f StoryForm) HasGenre(id int16) bool {
 	return slices.Contains(f.GenreIDs, strconv.Itoa(int(id)))
+}
+
+// warningsField es el name de las casillas de advertencias y la clave de sus errores.
+const warningsField = "warnings"
+
+// HasWarning dice si la advertencia está marcada en el formulario.
+func (f StoryForm) HasWarning(value string) bool {
+	return slices.Contains(f.Warnings, value)
+}
+
+// WarningsJSON son las advertencias marcadas, para el atributo data-selected del componente
+// warningChecks de Alpine. Sin ninguna codifica [] y no null, porque el JS espera un array.
+func (f StoryForm) WarningsJSON() string {
+	if f.Warnings == nil {
+		return "[]"
+	}
+	return mustJSON(f.Warnings)
+}
+
+// tagsField es el name del campo de tags y la clave de sus errores.
+const tagsField = "tags"
+
+// TagsText son los tags en un solo texto separado por comas, para el campo sin JS.
+func (f StoryForm) TagsText() string {
+	return strings.Join(cleanTagNames(f.Tags), ", ")
+}
+
+// TagsJSON son los tags, uno por elemento, para el atributo data-selected del componente
+// tagPicker de Alpine.
+func (f StoryForm) TagsJSON() string {
+	names := cleanTagNames(f.Tags)
+	if names == nil {
+		return "[]"
+	}
+	return mustJSON(names)
 }
 
 // genreChoice es un género tal como lo recibe el componente genreChecks de Alpine. El id va

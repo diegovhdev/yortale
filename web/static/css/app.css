@@ -619,6 +619,61 @@ form[action$="/delete"] button:hover {
   cursor: not-allowed;
 }
 
+/* Advertencias de contenido */
+
+/* Una casilla por fila, con la explicación debajo del nombre. */
+.warning-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.warning-checks > label {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.6rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg);
+  font-weight: 400;
+  cursor: pointer;
+}
+
+.warning-checks > label:hover {
+  border-color: var(--color-border-strong);
+}
+
+.warning-checks > label:has(input:checked) {
+  border-color: var(--color-brand-primary);
+  background: var(--color-brand-soft);
+}
+
+.warning-checks input {
+  margin-top: 0.2rem;
+}
+
+.warning-checks label span {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.warning-checks label small {
+  color: var(--color-text-muted);
+  font-size: 0.8125rem;
+}
+
+.warnings {
+  color: var(--color-text-muted);
+  font-size: 0.875rem;
+}
+
+.warnings strong {
+  color: var(--color-danger);
+}
+
 /* Vista previa de los géneros en el orden elegido (genre-checks.js). */
 .genre-preview {
   margin-top: 1rem;
@@ -647,7 +702,7 @@ form[action$="/delete"] button:hover {
 
 /* Botón × de las etiquetas: sin el aspecto de botón de global.css. */
 .genre-preview .remove,
-.genre-chip .remove {
+.tag-chip .remove {
   padding: 0 0.4rem;
   border: 0;
   border-radius: var(--radius-full);
@@ -660,7 +715,7 @@ form[action$="/delete"] button:hover {
 }
 
 .genre-preview .remove:hover,
-.genre-chip .remove:hover {
+.tag-chip .remove:hover {
   background: color-mix(in oklch, currentColor 15%, transparent);
 }
 
@@ -680,8 +735,23 @@ form[action$="/delete"] button:hover {
   }
 }
 
-/* Selector de etiquetas ordenables de web/static/js/genre-picker.js, sin uso por ahora. */
-.genre-chips {
+/* Tags */
+
+/* Campo de tags del formulario (web/static/js/tag-picker.js): etiquetas ordenables y un texto. */
+.tag-picker {
+  margin-bottom: 1.25rem;
+}
+
+.tag-picker input[type="text"] {
+  width: 100%;
+}
+
+.tag-picker .error {
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.tag-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -691,7 +761,7 @@ form[action$="/delete"] button:hover {
   min-height: 2rem;
 }
 
-.genre-chip {
+.tag-chip {
   display: inline-flex;
   align-items: center;
   gap: 0.25rem;
@@ -704,26 +774,61 @@ form[action$="/delete"] button:hover {
   touch-action: none; /* sin esto, en el móvil arrastrar desplaza la página en vez de mover el género */
 }
 
-.genre-chip.dragging {
+.tag-chip.dragging {
   cursor: grabbing;
   opacity: 0.6;
   border-style: dashed;
 }
 
-.genre-chip .remove {
+.tag-chip .remove {
   visibility: hidden;
 }
 
 /* La × solo aparece al pasar el ratón o con el foco; en pantallas táctiles no hay hover, así que se ve siempre. */
-.genre-chip:hover .remove,
-.genre-chip:focus-within .remove {
+.tag-chip:hover .remove,
+.tag-chip:focus-within .remove {
   visibility: visible;
 }
 
 @media (hover: none) {
-  .genre-chip .remove {
+  .tag-chip .remove {
     visibility: visible;
   }
+}
+
+/* Tags de una historia, cada uno enlazado a su página. */
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  list-style: none;
+  padding: 0;
+  margin: 0 0 0.75rem;
+  font-size: 0.8125rem;
+}
+
+.tags a {
+  display: inline-block;
+  padding: 0.1rem 0.6rem;
+  border: 1px solid var(--color-plum-600);
+  border-radius: var(--radius-full);
+  background: var(--color-brand-secondary-soft);
+  color: var(--color-plum-100);
+  text-decoration: none;
+}
+
+.tags a::before {
+  content: "#";
+  opacity: 0.6;
+}
+
+.tags a:hover {
+  border-color: var(--color-plum-400);
+}
+
+.tags .more {
+  padding: 0.1rem 0.3rem;
+  color: var(--color-text-muted);
 }
 
 @media (max-width: 40rem) {

@@ -59,6 +59,7 @@ templ StoryFormFragment(f StoryForm) {
 			Options: Kinds,
 		})
 		@genreChecks(f)
+		@tagPicker(f)
 		@components.Select(components.SelectProps{
 			Label:    "Idioma",
 			Name:     "language",
@@ -75,6 +76,7 @@ templ StoryFormFragment(f StoryForm) {
 			Options:  ContentRatings,
 			Required: true,
 		})
+		@warningChecks(f)
 		if !f.IsNew {
 			@components.Select(components.SelectProps{
 				Label:    "Estado",
@@ -150,6 +152,129 @@ templ genreChecks(f StoryForm) {
 		</div>
 		if f.Errors[genresField] != "" {
 			<small id="genres-error" class="error">{ f.Errors[genresField] }</small>
+		}
+	</fieldset>
+}
+
+// warningChecks es el campo de advertencias de contenido: una casilla por advertencia, con su
+// explicación. Es obligatorio elegir al menos una, y «No aplica ninguna» va sola; las dos
+// reglas las valida el servidor. Con JS, el componente warningChecks de Alpine
+// (web/static/js/warning-checks.js) desmarca las incompatibles al marcar una.
+templ warningChecks(f StoryForm) {
+	<fieldset
+		class="warning-checks"
+		x-data="warningChecks"
+		data-selected={ f.WarningsJSON() }
+		@pageshow.window="resync()"
+		if f.Errors[warningsField] != "" {
+			aria-describedby="warnings-error"
+		}
+	>
+		<legend>Advertencias de contenido</legend>
+		<p class="hint">Marca todas las que apliquen, para que cada lector decida si quiere leerla.</p>
+		for _, w := range ContentWarnings {
+			<label>
+				<input
+					type="checkbox"
+					name={ warningsField }
+					value={ w.Value }
+					checked?={ f.HasWarning(w.Value) }
+					autocomplete="off"
+					x-model="selected"
+				/>
+				<span>
+					<strong>{ w.Label }</strong>
+					<small>{ w.Description }</small>
+				</span>
+			</label>
+		}
+		if f.Errors[warningsField] != "" {
+			<small id="warnings-error" class="error">{ f.Errors[warningsField] }</small>
+		}
+	</fieldset>
+}
+
+// tagPicker es el campo de tags, opcional.
+//
+// Sin JS es un texto con los tags separados por comas, en el orden en que se escriben.
+// Con JS, el componente tagPicker de Alpine (web/static/js/tag-picker.js) muestra los tags
+// como etiquetas que se ordenan arrastrando (o con ← →), y el texto pasa a servir para
+// escribir el siguiente, con sugerencias de tags que ya existen. Cada etiqueta envía un input
+// oculto "tags" en su orden. El texto conserva su name, así que un tag escrito y sin
+// confirmar también se envía: el servidor separa por comas y quita los repetidos.
+templ tagPicker(f StoryForm) {
+	<fieldset
+		class="tag-picker"
+		x-data="tagPicker"
+		data-selected={ f.TagsJSON() }
+		data-max={ strconv.Itoa(maxTags) }
+		data-max-length={ strconv.Itoa(maxTagRunes) }
+		data-suggest-url="/api/tags"
+		if f.Errors[tagsField] != "" {
+			aria-describedby="tags-error"
+		}
+	>
+		<legend>Tags (opcional, hasta { strconv.Itoa(maxTags) })</legend>
+		<p class="hint" x-show="false">
+			Sepáralos con comas, en el orden en que quieras mostrarlos. Si un tag ya existe se usa
+			ese, aunque lo escribas con otras mayúsculas o sin tildes.
+		</p>
+		<p class="hint" x-cloak>
+			Pulsa Enter o escribe una coma para añadir cada tag, y arrástralos para ordenarlos. Si un
+			tag ya existe se usa ese, aunque lo escribas con otras mayúsculas o sin tildes.
+		</p>
+		<ul
+			class="tag-chips"
+			aria-label="Tags elegidos"
+			x-cloak
+			x-show="selected.length > 0"
+			x-ref="list"
+			@pointermove.window="drag($event)"
+			@pointerup.window="endDrag()"
+			@pointercancel.window="endDrag()"
+		>
+			<template x-for="(t, i) in selected" :key="t.key">
+				<li
+					class="tag-chip"
+					tabindex="0"
+					:data-key="t.key"
+					:class="{ dragging: dragging === t.key }"
+					@pointerdown="startDrag($event, t)"
+					@keydown.arrow-left.prevent="move(i, -1)"
+					@keydown.arrow-right.prevent="move(i, 1)"
+					@keydown.delete.prevent="remove(i)"
+					@keydown.backspace.prevent="remove(i)"
+				>
+					<input type="hidden" name={ tagsField } :value="t.name"/>
+					<span x-text="t.name"></span>
+					<button type="button" class="remove" :aria-label="'Quitar ' + t.name" @click="remove(i)">×</button>
+				</li>
+			</template>
+		</ul>
+		<input
+			type="text"
+			id="tags-input"
+			name={ tagsField }
+			value={ f.TagsText() }
+			aria-label="Tags"
+			list="tag-suggestions"
+			autocomplete="off"
+			x-ref="input"
+			x-model="draft"
+			:placeholder="full ? 'Llegaste al máximo de tags' : 'Escribe un tag'"
+			:disabled="full"
+			@input="onInput($event)"
+			@input.debounce.250ms="suggest()"
+			@keydown.enter="onEnter($event)"
+		/>
+		<datalist id="tag-suggestions">
+			<template x-for="t in suggestions" :key="t.slug">
+				<option :value="t.name" :label="t.uses === 1 ? '1 historia' : t.uses + ' historias'"></option>
+			</template>
+		</datalist>
+		<small class="error" role="status" x-cloak x-show="problem" x-text="problem"></small>
+		if f.Errors[tagsField] != "" {
+			<small id="tags-error" class="error">{ f.Errors[tagsField] }</small>
 		}
 	</fieldset>
 }

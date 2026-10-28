@@ -22,6 +22,21 @@ templ ExplorePage(v ExploreView) {
 				Value:   v.Kind,
 				Options: kindOptions("Todos"),
 			})
+			@components.Field(components.FieldProps{
+				Label: "Con los tags",
+				Name:  "tags",
+				Type:  "text",
+				Value: v.Tags,
+				Attrs: templ.Attributes{"placeholder": "Separados por comas; la historia debe tenerlos todos"},
+			})
+			@components.Field(components.FieldProps{
+				Label: "Sin los tags",
+				Name:  "exclude_tags",
+				Type:  "text",
+				Value: v.ExcludeTags,
+				Attrs: templ.Attributes{"placeholder": "Separados por comas"},
+			})
+			@warningFilter(v)
 			<button type="submit">Buscar</button>
 		</form>
 		if len(v.Stories) == 0 {
@@ -83,6 +98,8 @@ templ storyCard(s Story, showAuthor, authorActions bool) {
 			</p>
 		}
 		@storyMeta(s)
+		@storyWarnings(s)
+		@storyTags(s.CardTags(), s.HiddenTagCount())
 		if s.Synopsis != "" {
 			<p>{ excerpt(s.Synopsis, 300) }</p>
 		}
@@ -121,6 +138,22 @@ templ genreFilter(v ExploreView) {
 						:disabled={ "isBlocked('" + strconv.Itoa(int(g.ID)) + "')" }
 					/>
 					<span>{ g.Name }</span>
+				</label>
+			}
+		</div>
+	</fieldset>
+}
+
+// warningFilter son las casillas para ocultar historias con ciertas advertencias. Una historia
+// sale si no tiene ninguna de las marcadas.
+templ warningFilter(v ExploreView) {
+	<fieldset class="genre-picker">
+		<legend>Ocultar historias con</legend>
+		<div class="genre-options">
+			for _, w := range excludableWarnings() {
+				<label class="genre-option">
+					<input type="checkbox" name="exclude" value={ w.Value } checked?={ v.Excludes(w.Value) }/>
+					<span>{ w.Label }</span>
 				</label>
 			}
 		</div>

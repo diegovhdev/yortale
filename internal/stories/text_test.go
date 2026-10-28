@@ -24,6 +24,30 @@ func TestSlugify(t *testing.T) {
 	}
 }
 
+func TestTagSlug(t *testing.T) {
+	tests := []struct{ name, want string }{
+		{"Época Victoriana", "epoca-victoriana"},
+		{"EPOCA-victoriana", "epoca-victoriana"},
+		{"slow burn", "slow-burn"},
+		{"Slow_Burn!", "slow-burn"},
+		{"Edit", "edit"}, // a diferencia de Slugify, no hay palabras reservadas
+		{"!!!", ""},
+	}
+	for _, tt := range tests {
+		if got := TagSlug(tt.name); got != tt.want {
+			t.Errorf("TagSlug(%q) = %q, se esperaba %q", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestCleanTagNames(t *testing.T) {
+	got := cleanTagNames([]string{"Época victoriana,  slow   burn ,", "#romance", " , ", "## dos almohadillas"})
+	want := []string{"Época victoriana", "slow burn", "romance", "dos almohadillas"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("cleanTagNames = %q, se esperaba %q", got, want)
+	}
+}
+
 func TestSlugifyMaxLength(t *testing.T) {
 	long := ""
 	for range 30 {

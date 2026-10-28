@@ -1,6 +1,7 @@
 package stories
 
 import (
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -74,6 +75,16 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 		filter.GenreIDs = append(filter.GenreIDs, int16(id))
 		view.GenreIDs = append(view.GenreIDs, strconv.Itoa(int(id)))
 	}
+	for _, w := range excludableWarnings() {
+		if slices.Contains(q["exclude"], w.Value) {
+			filter.ExcludeWarnings = append(filter.ExcludeWarnings, w.Value)
+		}
+	}
+	view.ExcludeWarnings = filter.ExcludeWarnings
+	view.Tags = strings.TrimSpace(q.Get("tags"))
+	view.ExcludeTags = strings.TrimSpace(q.Get("exclude_tags"))
+	filter.Tags = tagFilterSlugs(view.Tags)
+	filter.ExcludeTags = tagFilterSlugs(view.ExcludeTags)
 
 	var err error
 	if view.Genres, err = h.stories.Genres(r.Context()); err != nil {
@@ -85,6 +96,46 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.Render(w, r, http.StatusOK, ExplorePage(view))
+}
+
+// ---------- Tags ----------
+
+// GET /tags/{slug}
+func (h *Handler) ShowTag(w http.ResponseWriter, r *http.Request) {
+	// Se acepta cualquier forma del tag (/tags/Época Victoriana) y se redirige a su slug.
+	slug := r.PathValue("slug")
+	if canonical := TagSlug(slug); canonical != slug {
+		if canonical == "" {
+			notFound(w)
+			return
+		}
+		http.Redirect(w, r, Tag{Slug: canonical}.URL(), http.StatusMovedPermanently)
+		return
+	}
+	page := 1
+	if p, err := strconv.Atoi(r.URL.Query().Get("page")); err == nil && p > 1 {
+		page = p
+	}
+	view, err := h.stories.TagPage(r.Context(), slug, page)
+	if err != nil {
+		fail(w, err, "mostrar tag")
+		return
+	}
+	httpx.Render(w, r, http.StatusOK, TagPage(view))
+}
+
+// GET /api/tags?q=…
+// Sugerencias para el campo de tags del formulario de historia, en JSON: [{name, slug, uses}].
+func (h *Handler) SuggestTags(w http.ResponseWriter, r *http.Request) {
+	tags, err := h.stories.SuggestTags(r.Context(), r.URL.Query().Get("q"))
+	if err != nil {
+		fail(w, err, "sugerir tags")
+		return
+	}
+	w.Header().Set("Content-Type", "application/json; charset=utf-8")
+	if err := json.NewEncoder(w).Encode(tags); err != nil {
+		slog.Error("escribir sugerencias de tags", "err", err)
+	}
 }
 
 // GET /my/stories
@@ -163,6 +214,8 @@ func storyFormValues(r *http.Request, f *StoryForm) {
 	f.GenreIDs = r.PostForm[genresField]
 	f.Language = r.PostFormValue("language")
 	f.ContentRating = r.PostFormValue("content_rating")
+	f.Warnings = r.PostForm[warningsField]
+	f.Tags = r.PostForm[tagsField]
 	f.Status = r.PostFormValue("status")
 }
 

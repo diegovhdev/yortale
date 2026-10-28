@@ -1,6 +1,10 @@
 package stories
 
-import "github.com/diegovhdev/yortale/web/components"
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
 
 templ StoryPage(v StoryView) {
 	@components.Layout(v.Story.Title) {
@@ -11,6 +15,8 @@ templ StoryPage(v StoryView) {
 				@authorLink(v.Story, true)
 			</p>
 			@storyMeta(v.Story)
+			@storyWarnings(v.Story)
+			@storyTags(v.Story.Tags, 0)
 			if v.Story.IsDraft() {
 				<p class="notice">Esta historia es un borrador: solo tú puedes verla. Se publica al publicar su primer capítulo.</p>
 			}
@@ -103,6 +109,35 @@ templ storyMeta(s Story) {
 			· actualizada el { formatDate(*s.LastChapterAt) }
 		}
 	</p>
+}
+
+// storyWarnings son las advertencias de contenido, en su propia línea para que se vean antes
+// de empezar a leer.
+templ storyWarnings(s Story) {
+	<p class="warnings">
+		<strong>Advertencias:</strong>
+		for i, label := range s.WarningLabels() {
+			if i > 0 {
+				,
+			}
+			{ label }
+		}
+	</p>
+}
+
+// storyTags son los tags de una historia, cada uno enlazado a su página. hidden es cuántos
+// más tiene y no se muestran (en las tarjetas de los listados solo caben maxCardTags).
+templ storyTags(tags []Tag, hidden int) {
+	if len(tags) > 0 {
+		<ul class="tags" aria-label="Tags">
+			for _, t := range tags {
+				<li><a href={ templ.URL(t.URL()) }>{ t.Name }</a></li>
+			}
+			if hidden > 0 {
+				<li class="more">{ "y " + strconv.Itoa(hidden) + " más" }</li>
+			}
+		</ul>
+	}
 }
 
 templ ConfirmDeletePage(c ConfirmDelete) {

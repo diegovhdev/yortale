@@ -51,6 +51,10 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /stories/{id}/delete", member(storyHandler.Delete))
 	mux.Handle("GET /my/stories", member(storyHandler.MyStories))
 
+	// Tags. /tags/{slug} acepta cualquier forma del nombre y redirige a su slug.
+	mux.HandleFunc("GET /tags/{slug}", storyHandler.ShowTag)
+	mux.Handle("GET /api/tags", member(storyHandler.SuggestTags))
+
 	// Capítulos. Se leen dentro de la URL de su historia; las acciones del autor
 	// van bajo /chapters/{id} para no chocar con el patrón /stories/{id}/{slug}/...
 	mux.HandleFunc("GET /stories/{id}/{slug}/chapters/{chapterID}", storyHandler.ReadChapter)

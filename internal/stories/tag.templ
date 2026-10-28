@@ -1,0 +1,38 @@
+package stories
+
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// TagPage lista las historias publicadas con un tag.
+templ TagPage(v TagView) {
+	@components.Layout(v.Tag.Name) {
+		<h1>{ v.Tag.Name }</h1>
+		<p class="meta">
+			Tag · { plural(v.Tag.Uses, "historia publicada", "historias publicadas") } ·
+			<a href={ templ.URL(v.ExploreURL()) }>Combinar con otros filtros</a>
+		</p>
+		if len(v.Stories) == 0 {
+			<p>Todavía no hay historias publicadas con este tag.</p>
+		} else {
+			<ul class="story-list">
+				for _, s := range v.Stories {
+					@storyCard(s, true, false)
+				}
+			</ul>
+		}
+		if v.Page > 1 || v.HasNext {
+			<nav class="pagination">
+				if v.Page > 1 {
+					<a href={ templ.URL(v.PageURL(v.Page - 1)) } rel="prev">← Anterior</a>
+				}
+				<span>Página { strconv.Itoa(v.Page) }</span>
+				if v.HasNext {
+					<a href={ templ.URL(v.PageURL(v.Page + 1)) } rel="next">Siguiente →</a>
+				}
+			</nav>
+		}
+	}
+}
