@@ -7,6 +7,7 @@ import (
 	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/home"
 	"github.com/diegovhdev/yortale/internal/legal"
+	"github.com/diegovhdev/yortale/internal/moderation"
 	"github.com/diegovhdev/yortale/internal/platform/middleware"
 	"github.com/diegovhdev/yortale/internal/stories"
 	"github.com/diegovhdev/yortale/web"
@@ -15,6 +16,7 @@ import (
 type Deps struct {
 	Auth          *auth.Service
 	Stories       *stories.Service
+	Moderation    *moderation.Service
 	SecureCookies bool
 }
 
@@ -22,9 +24,16 @@ func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	authHandler := auth.NewHandler(d.Auth, d.SecureCookies)
 	storyHandler := stories.NewHandler(d.Stories)
+	modHandler := moderation.NewHandler(d.Moderation)
 
-	// member envuelve las rutas que exigen sesión iniciada.
+	// member envuelve las rutas que exigen sesión iniciada; staff, las del equipo de moderación,
+	// y admin, las que solo pueden usar los administradores. El servicio de moderación vuelve
+	// a comprobar los permisos sobre cada cuenta (un moderador no puede suspender a otro).
 	member := func(h http.HandlerFunc) http.Handler { return auth.RequireUser(h) }
+	staff := func(h http.HandlerFunc) http.Handler {
+		return auth.RequireRole(auth.RoleModerator, auth.RoleAdmin)(h)
+	}
+	admin := func(h http.HandlerFunc) http.Handler { return auth.RequireRole(auth.RoleAdmin)(h) }
 
 	mux.HandleFunc("GET /{$}", home.Home)
 
@@ -65,6 +74,24 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /chapters/{id}/delete", member(storyHandler.ConfirmDeleteChapter))
 	mux.Handle("POST /chapters/{id}/delete", member(storyHandler.DeleteChapter))
 	mux.Handle("POST /chapters/{id}/move", member(storyHandler.MoveChapter))
+
+	// Reportes de los lectores. La historia y el capítulo van en la query (o en el formulario)
+	// y no en la ruta, para no competir con /stories/{id}/{slug}.
+	mux.Handle("GET /reports/new", member(modHandler.ShowReport))
+	mux.Handle("POST /reports", member(modHandler.CreateReport))
+	mux.Handle("GET /reports/sent", member(modHandler.ReportSent))
+
+	// Panel de moderación.
+	mux.Handle("GET /moderation", staff(modHandler.Queue))
+	mux.Handle("GET /moderation/log", staff(modHandler.Log))
+	mux.Handle("GET /moderation/stories/{id}", staff(modHandler.ShowStory))
+	mux.Handle("POST /moderation/stories/{id}/hide", staff(modHandler.HideStory))
+	mux.Handle("POST /moderation/stories/{id}/unhide", staff(modHandler.UnhideStory))
+	mux.Handle("POST /moderation/stories/{id}/dismiss", staff(modHandler.DismissReports))
+	mux.Handle("GET /moderation/users/{username}", staff(modHandler.ShowUser))
+	mux.Handle("POST /moderation/users/{username}/suspend", staff(modHandler.Suspend))
+	mux.Handle("POST /moderation/users/{username}/unsuspend", staff(modHandler.Unsuspend))
+	mux.Handle("POST /moderation/users/{username}/role", admin(modHandler.SetRole))
 
 	mux.HandleFunc("GET /terms", legal.Terms)
 	mux.HandleFunc("GET /privacy", legal.Privacy)

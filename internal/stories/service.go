@@ -76,6 +76,10 @@ func isAuthor(user *auth.User, s Story) bool {
 	return user != nil && user.ID == s.AuthorID
 }
 
+func isStaff(user *auth.User) bool {
+	return user != nil && user.IsStaff()
+}
+
 // ---------- Historias ----------
 
 // StoryInput son los valores del formulario de historia, tal como llegan.
@@ -343,17 +347,24 @@ func normalizeText(s string) string {
 	return strings.TrimSpace(strings.ReplaceAll(s, "\r\n", "\n"))
 }
 
-// Visible devuelve la historia si el usuario puede verla: los borradores solo los ve su autor.
-// viewer es nil para los visitantes.
+// Visible devuelve la historia si el usuario puede verla: los borradores solo los ve su autor,
+// y las ocultas por moderación, su autor y el equipo de moderación. viewer es nil para los visitantes.
 func (s *Service) Visible(ctx context.Context, viewer *auth.User, id int64) (Story, error) {
 	story, err := s.stories.Get(ctx, id)
 	if err != nil {
 		return Story{}, err
 	}
-	if story.IsDraft() && !isAuthor(viewer, story) {
+	author := isAuthor(viewer, story)
+	if (story.IsDraft() && !author) || (story.IsHidden() && !author && !isStaff(viewer)) {
 		return Story{}, ErrNotFound
 	}
 	return story, nil
+}
+
+// Story devuelve la historia sin comprobar quién la pide, borradores incluidos.
+// Solo para el equipo de moderación, que necesita ver cualquier historia reportada.
+func (s *Service) Story(ctx context.Context, id int64) (Story, error) {
+	return s.stories.Get(ctx, id)
 }
 
 // ForAuthor devuelve la historia solo si authorID es su autor.
@@ -379,7 +390,7 @@ func (s *Service) StoryPage(ctx context.Context, viewer *auth.User, id int64) (S
 	if err != nil {
 		return StoryView{}, err
 	}
-	return StoryView{Story: story, Chapters: chapters, IsAuthor: author}, nil
+	return StoryView{Story: story, Chapters: chapters, IsAuthor: author, IsStaff: isStaff(viewer)}, nil
 }
 
 func (s *Service) Delete(ctx context.Context, authorID, id int64) error {
@@ -461,7 +472,8 @@ func (s *Service) AuthorPage(ctx context.Context, viewer *auth.User, username st
 	if err != nil {
 		return AuthorView{}, err
 	}
-	v := AuthorView{Author: author, Stories: stories, IsOwner: viewer != nil && viewer.ID == author.ID}
+	v := AuthorView{Author: author, Stories: stories, IsOwner: viewer != nil && viewer.ID == author.ID,
+		CanModerate: isStaff(viewer)}
 	for _, st := range stories {
 		v.TotalReads += st.ReadsCount
 	}
@@ -582,7 +594,7 @@ func (s *Service) ReadChapter(ctx context.Context, viewer *auth.User, storyID, c
 		return ChapterView{}, ErrNotFound
 	}
 	c := chapters[i]
-	v := ChapterView{Story: story, Chapter: c, IsAuthor: author}
+	v := ChapterView{Story: story, Chapter: c, IsAuthor: author, IsStaff: isStaff(viewer)}
 	if i > 0 {
 		v.Prev = &chapters[i-1]
 	}
@@ -590,7 +602,8 @@ func (s *Service) ReadChapter(ctx context.Context, viewer *auth.User, storyID, c
 		v.Next = &chapters[i+1]
 	}
 
-	if viewer != nil && !author && c.IsPublished {
+	// Las lecturas del equipo revisando una historia oculta no cuentan.
+	if viewer != nil && !author && c.IsPublished && !story.IsHidden() {
 		// Que falle el contador no debe impedir leer: se registra el error y se sigue.
 		if err := s.stories.RecordRead(ctx, viewer.ID, story.ID, c.ID); err != nil {
 			slog.Error("registrar lectura", "err", err, "story_id", story.ID, "chapter_id", c.ID)

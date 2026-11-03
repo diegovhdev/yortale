@@ -28,13 +28,14 @@ func (r *SessionRepository) Create(ctx context.Context, tokenHash string, userID
 	return nil
 }
 
-// GetUser devuelve el usuario dueño de una sesión que todavía no ha expirado.
+// GetUser devuelve el usuario dueño de una sesión que todavía no ha expirado. Al suspender una
+// cuenta se borran sus sesiones; el filtro de suspensión es por si alguna se cuela.
 func (r *SessionRepository) GetUser(ctx context.Context, tokenHash string) (User, error) {
 	const q = `
 		SELECT ` + userColumns + `
 		FROM sessions s
 		JOIN users u ON u.id = s.user_id
-		WHERE s.token_hash = $1 AND s.expires_at > now()`
+		WHERE s.token_hash = $1 AND s.expires_at > now() AND NOT ` + suspendedExpr
 
 	user, err := scanUser(r.db.QueryRow(ctx, q, tokenHash))
 	if errors.Is(err, pgx.ErrNoRows) {

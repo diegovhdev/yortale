@@ -841,3 +841,78 @@ form[action$="/delete"] button:hover {
     font-size: 1.075rem;
   }
 }
+
+/* Moderación */
+
+/* Aviso de historia oculta o cuenta suspendida: como .notice, pero en el tono de error. */
+.notice-danger {
+  background: var(--color-danger-soft);
+  border-color: var(--color-danger-border);
+  border-left-color: var(--color-danger);
+  color: var(--color-text);
+}
+
+/* Enlaces discretos para reportar o moderar, al pie de una historia o un capítulo. */
+.flags {
+  display: flex;
+  gap: 1rem;
+  margin-top: 2rem;
+  font-size: 0.85rem;
+}
+
+.flags a {
+  color: var(--color-text-subtle);
+}
+
+.flags a:hover {
+  color: var(--color-link-hover);
+}
+
+/* Las acciones que quitan algo de la vista pública van en el tono de peligro. */
+form[action$="/hide"] button,
+form[action$="/suspend"] button {
+  background: var(--color-danger-strong);
+  color: var(--color-umber-50);
+}
+
+form[action$="/hide"] button:hover,
+form[action$="/suspend"] button:hover {
+  background: var(--color-danger);
+}
+
+.report-list,
+.mod-log {
+  display: grid;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+  margin: 1rem 0 2rem;
+}
+
+.report,
+.mod-log li {
+  padding: 0.9rem 1.1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.report p,
+.mod-log p {
+  margin: 0 0 0.35rem;
+}
+
+.report p:last-child,
+.mod-log p:last-child {
+  margin-bottom: 0;
+}
+
+/* Los reportes abiertos se distinguen de los ya cerrados. */
+.report-open {
+  border-left: 3px solid var(--color-danger);
+}
+
+.report-details {
+  white-space: pre-line;
+  color: var(--color-text-reading);
+}

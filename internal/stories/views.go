@@ -14,7 +14,11 @@ type StoryView struct {
 	Story    Story
 	Chapters []Chapter // sin texto; incluye borradores solo si IsAuthor
 	IsAuthor bool
+	IsStaff  bool // quien mira es del equipo de moderación
 }
+
+// CanReport dice si se muestra el enlace para reportar: no a su autor, y no si ya está oculta.
+func (v StoryView) CanReport() bool { return !v.IsAuthor && !v.Story.IsHidden() }
 
 // ChapterView es lo que muestra la página de lectura de un capítulo.
 type ChapterView struct {
@@ -23,7 +27,10 @@ type ChapterView struct {
 	Prev     *Chapter
 	Next     *Chapter
 	IsAuthor bool
+	IsStaff  bool
 }
+
+func (v ChapterView) CanReport() bool { return !v.IsAuthor && !v.Story.IsHidden() }
 
 // ExploreView es la página de explorar: búsqueda, filtros por géneros y tipo, y resultados paginados.
 type ExploreView struct {
@@ -124,4 +131,11 @@ type AuthorView struct {
 	Stories    []Story // solo publicadas
 	TotalReads int64   // suma de los lectores de sus historias
 	IsOwner    bool    // quien mira es el propio autor
+	// CanModerate dice si quien mira es del equipo de moderación.
+	CanModerate bool
+}
+
+// ModerationURL es la página de moderación de la cuenta del autor (paquete moderation).
+func (v AuthorView) ModerationURL() string {
+	return "/moderation/users/" + url.PathEscape(v.Author.Username)
 }

@@ -100,12 +100,22 @@ func HomePage(user *auth.User) templ.Component {
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">Ver tu perfil público</a> · <a href=\"/settings/profile\">Editar perfil</a></p><form action=\"/logout\" method=\"post\"><button type=\"submit\">Cerrar sesión</button></form>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "\">Ver tu perfil público</a> · <a href=\"/settings/profile\">Editar perfil</a></p>")
+				if templ_7745c5c3_Err != nil {
+					return templ_7745c5c3_Err
+				}
+				if user.IsStaff() {
+					templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<p><a href=\"/moderation\">Panel de moderación</a></p>")
+					if templ_7745c5c3_Err != nil {
+						return templ_7745c5c3_Err
+					}
+				}
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, " <form action=\"/logout\" method=\"post\"><button type=\"submit\">Cerrar sesión</button></form>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}
 			} else {
-				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<h1>Bienvenido a YorTale</h1><p><a href=\"/login\">Inicia sesión</a> o <a href=\"/register\">crea una cuenta</a>.</p><p><a href=\"/stories\">Explora las historias publicadas</a>.</p>")
+				templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "<h1>Bienvenido a YorTale</h1><p><a href=\"/login\">Inicia sesión</a> o <a href=\"/register\">crea una cuenta</a>.</p><p><a href=\"/stories\">Explora las historias publicadas</a>.</p>")
 				if templ_7745c5c3_Err != nil {
 					return templ_7745c5c3_Err
 				}

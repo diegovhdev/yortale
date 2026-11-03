@@ -1,0 +1,94 @@
+package moderation
+
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+templ ReportPage(f ReportForm) {
+	@components.Layout("Reportar") {
+		<h1>Reportar</h1>
+		<p>
+			if f.Target.ChapterID != 0 {
+				Capítulo <a href={ templ.URL(f.Target.URL()) }>{ f.Target.ChapterTitle }</a> de{ " " }
+			} else {
+				Historia{ " " }
+			}
+			<a href={ templ.URL(f.Target.Story.URL()) }>{ f.Target.Story.Title }</a>, por { f.Target.Story.AuthorName }
+			<span class="handle">{ "@" + f.Target.Story.AuthorUsername }</span>
+		</p>
+		@ReportFormFragment(f)
+	}
+}
+
+// ReportFormFragment es solo el formulario; htmx lo reemplaza completo si hay errores.
+// La historia y el capítulo viajan en campos ocultos.
+templ ReportFormFragment(f ReportForm) {
+	if f.Own {
+		<p class="notice">No puedes reportar tu propio contenido. <a href={ templ.URL(f.Target.URL()) }>Volver</a></p>
+	} else {
+		<form
+			id="report-form"
+			action="/reports"
+			method="post"
+			hx-post="/reports"
+			hx-target="this"
+			hx-swap="outerHTML"
+			hx-disable="find button"
+		>
+			if f.General != "" {
+				<p class="error" role="alert">{ f.General }</p>
+			}
+			<input type="hidden" name="story" value={ f.StoryIDValue() }/>
+			if f.ChapterIDValue() != "" {
+				<input type="hidden" name="chapter" value={ f.ChapterIDValue() }/>
+			}
+			<fieldset
+				class="warning-checks"
+				if f.Errors["reason"] != "" {
+					aria-describedby="reason-error"
+				}
+			>
+				<legend>¿Cuál es el problema?</legend>
+				for _, reason := range ReportReasons {
+					<label>
+						<input type="radio" name="reason" value={ reason.Value } checked?={ reason.Value == f.Reason } required/>
+						<span>
+							<strong>{ reason.Label }</strong>
+							<small>{ reason.Description }</small>
+						</span>
+					</label>
+				}
+				if f.Errors["reason"] != "" {
+					<small id="reason-error" class="error">{ f.Errors["reason"] }</small>
+				}
+			</fieldset>
+			@components.TextArea(components.FieldProps{
+				Label: "Detalles (opcional, salvo con «Otro motivo»)",
+				Name:  "details",
+				Value: f.Details,
+				Error: f.Errors["details"],
+				Attrs: templ.Attributes{
+					"rows":        "4",
+					"maxlength":   strconv.Itoa(maxReportDetailsRunes),
+					"placeholder": "Por ejemplo, dónde está el texto original si es un plagio.",
+				},
+			})
+			<small>Solo lo ve el equipo de moderación. El autor no sabrá quién lo reportó.</small>
+			<button type="submit">Enviar reporte</button>
+			<a href={ templ.URL(f.Target.URL()) }>Cancelar</a>
+			<span class="htmx-indicator">Enviando…</span>
+		</form>
+	}
+}
+
+templ ReportSentPage(storyID int64) {
+	@components.Layout("Reporte enviado") {
+		<h1>Gracias por avisar</h1>
+		<p>El equipo de moderación revisará tu reporte. Si el contenido incumple los términos de uso, se ocultará.</p>
+		if storyID > 0 {
+			<p class="actions"><a href={ templ.URL("/stories/" + strconv.FormatInt(storyID, 10)) }>Volver a la historia</a></p>
+		}
+	}
+}

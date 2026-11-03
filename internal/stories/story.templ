@@ -20,6 +20,7 @@ templ StoryPage(v StoryView) {
 			if v.Story.IsDraft() {
 				<p class="notice">Esta historia es un borrador: solo tú puedes verla. Se publica al publicar su primer capítulo.</p>
 			}
+			@hiddenNotice(v.Story)
 			if v.Story.Synopsis != "" {
 				<div class="synopsis">
 					for _, p := range paragraphs(v.Story.Synopsis) {
@@ -34,6 +35,7 @@ templ StoryPage(v StoryView) {
 					<a href={ templ.URL(v.Story.DeleteURL()) }>Borrar historia</a>
 				</p>
 			}
+			@storyFlags(v.Story, v.IsStaff, v.CanReport(), v.Story.ReportURL())
 			<h2>Capítulos</h2>
 			if len(v.Chapters) == 0 {
 				<p>Todavía no hay capítulos publicados.</p>
@@ -53,6 +55,35 @@ templ StoryPage(v StoryView) {
 				</ol>
 			}
 		</article>
+	}
+}
+
+// hiddenNotice avisa de que la moderación ocultó la historia. Solo pueden verla así su autor
+// y el equipo de moderación (ver Service.Visible).
+templ hiddenNotice(s Story) {
+	if s.IsHidden() {
+		<p class="notice notice-danger">
+			Esta historia está oculta por moderación desde el { formatDate(*s.HiddenAt) }: no aparece en
+			ningún listado y solo la ven su autor y el equipo de moderación.
+			if s.HiddenReason != "" {
+				Motivo: { s.HiddenReason }
+			}
+		</p>
+	}
+}
+
+// storyFlags son los enlaces discretos para reportar la historia o un capítulo (reportURL) y,
+// para el equipo, para moderarla.
+templ storyFlags(s Story, staff, canReport bool, reportURL string) {
+	if staff || canReport {
+		<p class="flags">
+			if staff {
+				<a href={ templ.URL(s.ModerationURL()) }>Moderar</a>
+			}
+			if canReport {
+				<a href={ templ.URL(reportURL) } rel="nofollow">Reportar</a>
+			}
+		</p>
 	}
 }
 

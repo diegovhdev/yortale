@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -90,6 +91,20 @@ func RequireUser(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// RequireRole deja pasar solo a usuarios con alguno de esos roles. A los visitantes los manda
+// al login, como RequireUser; a los demás usuarios les responde 403.
+func RequireRole(roles ...string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return RequireUser(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if !slices.Contains(roles, CurrentUser(r.Context()).Role) {
+				http.Error(w, "No tienes permiso para ver esta página", http.StatusForbidden)
+				return
+			}
+			next.ServeHTTP(w, r)
+		}))
+	}
 }
 
 // SafeNext devuelve next solo si es una ruta de este mismo sitio; si no, "/".

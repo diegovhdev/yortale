@@ -32,8 +32,11 @@ type Story struct {
 	LastChapterAt  *time.Time
 	ReadsCount     int64
 	ChapterCount   int // solo capítulos publicados
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	// HiddenAt no es nil si la moderación la ocultó: entonces solo la ven el autor y el equipo.
+	HiddenAt     *time.Time
+	HiddenReason string
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 }
 
 type Genre struct {
@@ -131,6 +134,20 @@ func (s Story) NewChapterURL() string { return fmt.Sprintf("/stories/%d/chapters
 func (s Story) ChaptersURL() string   { return fmt.Sprintf("/stories/%d/chapters", s.ID) }
 
 func (s Story) IsDraft() bool { return s.Status == StatusDraft }
+
+func (s Story) IsHidden() bool { return s.HiddenAt != nil }
+
+// hiddenReasonSuffix es ": motivo" si la moderación dio uno, para la tarjeta de «Mis historias».
+func hiddenReasonSuffix(s Story) string {
+	if s.HiddenReason == "" {
+		return "."
+	}
+	return ": " + s.HiddenReason
+}
+
+// ReportURL y ModerationURL llevan a las páginas del paquete moderation.
+func (s Story) ReportURL() string     { return fmt.Sprintf("/reports/new?story=%d", s.ID) }
+func (s Story) ModerationURL() string { return fmt.Sprintf("/moderation/stories/%d", s.ID) }
 
 func (s Story) AuthorURL() string { return auth.ProfileURL(s.AuthorUsername) }
 

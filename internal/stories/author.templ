@@ -29,6 +29,9 @@ templ AuthorPage(v AuthorView) {
 					<a href="/my/stories">Mis historias (incluye borradores)</a>
 				</p>
 			}
+			if v.CanModerate {
+				<p class="flags"><a href={ templ.URL(v.ModerationURL()) }>Moderar esta cuenta</a></p>
+			}
 		</section>
 		<h2>Historias</h2>
 		if len(v.Stories) == 0 {

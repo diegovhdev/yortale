@@ -103,10 +103,18 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	form := LoginForm{Login: r.PostFormValue("login"), Next: SafeNext(r.PostFormValue("next"))}
 
 	user, err := h.auth.Authenticate(r.Context(), form.Login, r.PostFormValue("password"))
+	var suspended SuspendedError
 	switch {
 	case errors.Is(err, ErrInvalidCredentials):
 		form.General = "Usuario, correo o contraseña incorrectos."
 		h.renderLogin(w, r, http.StatusUnprocessableEntity, form)
+		return
+	case errors.As(err, &suspended):
+		form.General = "Tu cuenta está suspendida " + suspended.User.SuspensionText() + "."
+		if suspended.User.SuspensionReason != "" {
+			form.General += " Motivo: " + suspended.User.SuspensionReason
+		}
+		h.renderLogin(w, r, http.StatusForbidden, form)
 		return
 	case err != nil:
 		slog.Error("autenticar", "err", err)

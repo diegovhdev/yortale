@@ -26,6 +26,10 @@ var (
 	ErrInvalidCredentials = errors.New("credenciales inválidas")
 	ErrNoSession          = errors.New("sesión inválida o expirada")
 
+	// ErrSuspended lo devuelve Authenticate si la contraseña es correcta pero la cuenta está
+	// suspendida. Viene envuelto en SuspendedError, que dice hasta cuándo y por qué.
+	ErrSuspended = errors.New("cuenta suspendida")
+
 	// Debe coincidir con el CHECK de la columna users.username.
 	usernamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{3,30}$`)
 )
@@ -36,6 +40,13 @@ const (
 	// display_name no tiene CHECK en la base de datos; este límite es la única validación.
 	maxDisplayNameRunes = 50
 )
+
+// SuspendedError es el error de iniciar sesión con una cuenta suspendida.
+// errors.Is(err, ErrSuspended) lo reconoce.
+type SuspendedError struct{ User User }
+
+func (e SuspendedError) Error() string { return ErrSuspended.Error() }
+func (e SuspendedError) Unwrap() error { return ErrSuspended }
 
 // ValidationErrors asocia el nombre de cada campo del formulario con su mensaje de error.
 type ValidationErrors map[string]string
@@ -145,6 +156,10 @@ func (s *Service) Authenticate(ctx context.Context, login, password string) (Use
 	}
 	if !ok {
 		return User{}, ErrInvalidCredentials
+	}
+	// Se comprueba después de la contraseña: si no, se revelaría qué cuentas están suspendidas.
+	if user.Suspended {
+		return User{}, SuspendedError{User: user}
 	}
 	return user, nil
 }

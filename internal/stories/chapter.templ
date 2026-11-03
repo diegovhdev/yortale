@@ -13,6 +13,7 @@ templ ChapterPage(v ChapterView) {
 			if !v.Chapter.IsPublished {
 				<p class="notice">Este capítulo es un borrador: solo tú puedes verlo.</p>
 			}
+			@hiddenNotice(v.Story)
 			if v.IsAuthor {
 				<p class="actions"><a href={ templ.URL(v.Chapter.EditURL()) }>Editar capítulo</a></p>
 			}
@@ -22,6 +23,7 @@ templ ChapterPage(v ChapterView) {
 				}
 			</div>
 			@chapterNav(v)
+			@storyFlags(v.Story, v.IsStaff, v.CanReport(), v.Chapter.ReportURL())
 		</article>
 	}
 }

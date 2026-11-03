@@ -29,6 +29,11 @@ func (c Chapter) EditURL() string   { return fmt.Sprintf("/chapters/%d/edit", c.
 func (c Chapter) DeleteURL() string { return fmt.Sprintf("/chapters/%d/delete", c.ID) }
 func (c Chapter) MoveURL() string   { return fmt.Sprintf("/chapters/%d/move", c.ID) }
 
+// ReportURL lleva al formulario para reportar el capítulo (paquete moderation).
+func (c Chapter) ReportURL() string {
+	return fmt.Sprintf("/reports/new?story=%d&chapter=%d", c.StoryID, c.ID)
+}
+
 // Paragraphs divide el texto del capítulo en párrafos separados por líneas en blanco.
 func (c Chapter) Paragraphs() []string { return paragraphs(c.Content) }
 

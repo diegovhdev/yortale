@@ -4,86 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/diegovhdev/yortale/internal/auth"
-	"github.com/jackc/pgx/v5"
+	"github.com/diegovhdev/yortale/internal/platform/dbtest"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// testDB crea un esquema temporal con db/schema.sql y devuelve un pool que trabaja dentro de él.
-// El esquema se borra al terminar el test. Se salta si no hay TEST_DATABASE_URL.
-//
-// TEST_DATABASE_URL debe ser una conexión directa (en Neon, el host sin "-pooler"): el pooler
-// reparte las sentencias entre conexiones y el SET search_path no se mantendría.
-func testDB(t *testing.T) *pgxpool.Pool {
-	t.Helper()
-	dsn := os.Getenv("TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("TEST_DATABASE_URL no está definida")
-	}
-	ctx := context.Background()
-
-	admin, err := pgxpool.New(ctx, dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(admin.Close)
-
-	schema := fmt.Sprintf("test_stories_%d", time.Now().UnixNano())
-	if _, err := admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		if _, err := admin.Exec(context.Background(), "DROP SCHEMA "+schema+" CASCADE"); err != nil {
-			t.Errorf("borrar el esquema %s: %v", schema, err)
-		}
-	})
-
-	cfg, err := pgxpool.ParseConfig(dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Neon ignora search_path como parámetro de conexión, así que se fija en cada conexión nueva.
-	// public sigue en la ruta porque ahí están las extensiones (citext, pg_trgm).
-	cfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		_, err := conn.Exec(ctx, "SET search_path TO "+schema+", public")
-		return err
-	}
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(pool.Close)
-
-	ddl, err := os.ReadFile("../../db/schema.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := pool.Exec(ctx, string(ddl)); err != nil {
-		t.Fatalf("aplicar schema.sql: %v", err)
-	}
-	return pool
-}
-
 func createUser(t *testing.T, pool *pgxpool.Pool, username string) *auth.User {
 	t.Helper()
-	u := &auth.User{Username: username}
-	err := pool.QueryRow(context.Background(),
-		`INSERT INTO users (username, email, password_hash) VALUES ($1, $2, 'x') RETURNING id`,
-		username, username+"@example.com").Scan(&u.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return u
+	return &auth.User{ID: dbtest.CreateUser(t, pool, username), Username: username}
 }
 
 func TestStoriesIntegration(t *testing.T) {
-	pool := testDB(t)
+	pool := dbtest.New(t)
 	ctx := context.Background()
 	users := auth.NewService(auth.NewUserRepository(pool), auth.NewSessionRepository(pool))
 	svc := NewService(NewStoryRepository(pool), NewChapterRepository(pool), users)

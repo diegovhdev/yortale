@@ -18,12 +18,17 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
+// suspendedExpr dice si la cuenta u tiene una suspensión vigente (ver users.suspended_at).
+const suspendedExpr = `(u.suspended_at IS NOT NULL AND (u.suspended_until IS NULL OR u.suspended_until > now()))`
+
 // Las columnas citext se convierten a text (::text) para leerlas como string en Go.
-const userColumns = `u.id, u.username::text, u.email::text, u.display_name, coalesce(u.bio, ''), u.role, u.created_at`
+const userColumns = `u.id, u.username::text, u.email::text, u.display_name, coalesce(u.bio, ''), u.role,
+	` + suspendedExpr + `, u.suspended_until, coalesce(u.suspension_reason, ''), u.created_at`
 
 func scanUser(row pgx.Row, extra ...any) (User, error) {
 	var u User
-	dest := append([]any{&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.Bio, &u.Role, &u.CreatedAt}, extra...)
+	dest := append([]any{&u.ID, &u.Username, &u.Email, &u.DisplayName, &u.Bio, &u.Role,
+		&u.Suspended, &u.SuspendedUntil, &u.SuspensionReason, &u.CreatedAt}, extra...)
 	err := row.Scan(dest...)
 	return u, err
 }

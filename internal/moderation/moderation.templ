@@ -1,0 +1,289 @@
+package moderation
+
+import (
+	"strconv"
+	"strings"
+
+	"github.com/diegovhdev/yortale/internal/stories"
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// modNav son los enlaces entre las páginas del panel.
+templ modNav() {
+	<p class="actions">
+		<a href="/moderation">Reportes pendientes</a>
+		<a href="/moderation/log">Registro de acciones</a>
+	</p>
+}
+
+// QueuePage es la cola de moderación: las historias con reportes abiertos.
+templ QueuePage(cases []Case) {
+	@components.Layout("Moderación") {
+		<h1>Moderación</h1>
+		@modNav()
+		if len(cases) == 0 {
+			<p>No hay reportes pendientes.</p>
+		} else {
+			<ul class="story-list">
+				for _, c := range cases {
+					<li class="story-card">
+						<h2><a href={ templ.URL(c.URL()) }>{ c.StoryTitle }</a></h2>
+						<p class="meta">
+							<a href={ templ.URL(userModerationURL(c.AuthorUsername)) }>{ "@" + c.AuthorUsername }</a> ·
+							{ plural(c.OpenReports, "reporte abierto", "reportes abiertos") } ·
+							esperando desde el { formatDateTime(c.OldestReportAt) }
+							if c.Hidden {
+								· <strong>ya oculta</strong>
+							}
+						</p>
+						<p>{ strings.Join(c.ReasonLabels(), ", ") }</p>
+					</li>
+				}
+			</ul>
+		}
+	}
+}
+
+// StoryCasePage es la página de moderación de una historia: su estado, sus reportes, qué
+// hacer con ella y lo que ya se hizo.
+templ StoryCasePage(v StoryCaseView) {
+	@components.Layout("Moderar: " + v.Story.Title) {
+		<h1>Moderar: { v.Story.Title }</h1>
+		@modNav()
+		<p class="meta">
+			por <a href={ templ.URL(v.AuthorModerationURL()) }>{ "@" + v.Story.AuthorUsername }</a> ·
+			{ v.Story.StatusLabel() } · { v.Story.ContentRatingLabel() } ·
+			{ plural(v.Story.ChapterCount, "capítulo publicado", "capítulos publicados") }
+		</p>
+		if !v.Story.IsDraft() {
+			<p><a href={ templ.URL(v.Story.URL()) }>Leer la historia</a></p>
+		} else {
+			<p class="notice">El autor la ha vuelto a poner como borrador: ahora mismo nadie más puede verla.</p>
+		}
+		if v.Story.IsHidden() {
+			<p class="notice notice-danger">
+				Oculta desde el { formatDateTime(*v.Story.HiddenAt) }.
+				if v.Story.HiddenReason != "" {
+					Motivo: { v.Story.HiddenReason }
+				}
+			</p>
+			<form method="post" action={ templ.URL(v.UnhideURL()) }>
+				<button type="submit">Volver a mostrarla</button>
+			</form>
+		} else {
+			@HideFormFragment(v.Hide)
+		}
+		<h2>Reportes</h2>
+		if v.OpenReports() > 0 {
+			<form method="post" action={ templ.URL(v.DismissURL()) } class="actions">
+				<button type="submit">{ v.DismissLabel() }</button>
+			</form>
+			<p class="hint">Descártalos si la historia no incumple nada. Al ocultarla, se dan por resueltos.</p>
+		}
+		if len(v.Reports) == 0 {
+			<p>Esta historia no tiene reportes.</p>
+		} else {
+			<ul class="report-list">
+				for _, r := range v.Reports {
+					<li class={ "report", templ.KV("report-open", r.IsOpen()) }>
+						<p>
+							<strong>{ r.ReasonLabel() }</strong>
+							if r.ChapterTitle != nil {
+								· capítulo <a href={ templ.URL(v.ChapterURL(r)) }>{ *r.ChapterTitle }</a>
+							}
+						</p>
+						if r.Details != "" {
+							<p class="report-details">{ r.Details }</p>
+						}
+						<p class="meta">
+							{ r.StatusLabel() } · de { usernameOrDeleted(r.ReporterUsername) } el { formatDateTime(r.CreatedAt) }
+							if r.ReviewedAt != nil {
+								· cerrado por { usernameOrDeleted(r.ReviewerUsername) } el { formatDateTime(*r.ReviewedAt) }
+							}
+						</p>
+					</li>
+				}
+			</ul>
+		}
+		<h2>Historial</h2>
+		@actionList(v.Actions, false)
+	}
+}
+
+// HideFormFragment es el formulario para ocultar una historia; htmx lo reemplaza si hay errores.
+templ HideFormFragment(f HideForm) {
+	<form
+		id="hide-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.TextArea(components.FieldProps{
+			Label:    "Motivo para ocultarla (lo verá el autor)",
+			Name:     "reason",
+			Value:    f.Reason,
+			Error:    f.Errors["reason"],
+			Required: true,
+			Attrs:    templ.Attributes{"rows": "3", "maxlength": strconv.Itoa(maxModReasonRunes)},
+		})
+		<small>Dejará de salir en explorar, en los tags y en el perfil del autor. Sus reportes abiertos se darán por resueltos.</small>
+		<button type="submit">Ocultar historia</button>
+		<span class="htmx-indicator">Ocultando…</span>
+	</form>
+}
+
+// UserPage es la página de moderación de una cuenta. Las acciones salen solo si quien modera
+// tiene permiso (ver canSuspend y canChangeRole); el servidor lo vuelve a comprobar.
+templ UserPage(v UserView) {
+	@components.Layout("Moderar: @" + v.User.Username) {
+		<h1>Moderar: { "@" + v.User.Username }</h1>
+		@modNav()
+		<p class="meta">
+			{ v.User.Name() } · { v.User.RoleLabel() } · se unió el { formatDateTime(v.User.CreatedAt) } ·
+			<a href={ templ.URL(v.User.ProfileURL()) }>perfil público</a>
+		</p>
+		if v.User.Suspended {
+			<p class="notice notice-danger">
+				Cuenta suspendida { v.User.SuspensionText() }.
+				if v.User.SuspensionReason != "" {
+					Motivo: { v.User.SuspensionReason }
+				}
+			</p>
+			if v.CanSuspend {
+				<form method="post" action={ templ.URL(v.UnsuspendURL()) }>
+					<button type="submit">Levantar la suspensión</button>
+				</form>
+			}
+		} else if v.CanSuspend {
+			<h2>Suspender</h2>
+			@SuspendFormFragment(v.Suspend)
+		}
+		if v.CanChangeRole {
+			<h2>Rol</h2>
+			<form id="role-form" method="post" action={ templ.URL(v.Role.Action) }>
+				@components.Select(components.SelectProps{
+					Label:   "Rol de la cuenta",
+					Name:    "role",
+					Value:   v.Role.Role,
+					Error:   v.Role.Error,
+					Options: v.Role.Options,
+				})
+				<small>Los moderadores revisan reportes, ocultan historias y suspenden a usuarios. Los administradores, además, cambian roles y suspenden de forma indefinida.</small>
+				<button type="submit">Cambiar rol</button>
+			</form>
+		}
+		if !v.CanSuspend && !v.CanChangeRole {
+			<p class="hint">Tu rol no te permite actuar sobre esta cuenta.</p>
+		}
+		<h2>Historial</h2>
+		@actionList(v.Actions, true)
+	}
+}
+
+// SuspendFormFragment es el formulario para suspender una cuenta; htmx lo reemplaza si hay errores.
+templ SuspendFormFragment(f SuspendForm) {
+	<form
+		id="suspend-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Radios(components.RadioProps{
+			Legend:  "Duración",
+			Name:    "duration",
+			Value:   f.Duration,
+			Error:   f.Errors["duration"],
+			Options: f.Durations,
+		})
+		@components.TextArea(components.FieldProps{
+			Label:    "Motivo (lo verá la persona al intentar entrar)",
+			Name:     "reason",
+			Value:    f.Reason,
+			Error:    f.Errors["reason"],
+			Required: true,
+			Attrs:    templ.Attributes{"rows": "3", "maxlength": strconv.Itoa(maxModReasonRunes)},
+		})
+		<small>Se cerrarán todas sus sesiones y no podrá entrar hasta que termine. Sus historias siguen visibles: ocúltalas aparte si hace falta.</small>
+		<button type="submit">Suspender cuenta</button>
+		<span class="htmx-indicator">Suspendiendo…</span>
+	</form>
+}
+
+templ LogPage(v LogView) {
+	@components.Layout("Registro de moderación") {
+		<h1>Registro de moderación</h1>
+		@modNav()
+		@actionList(v.Actions, true)
+		if v.Page > 1 || v.HasNext {
+			<nav class="pagination">
+				if v.Page > 1 {
+					<a href={ templ.URL(v.PageURL(v.Page - 1)) } rel="prev">← Anterior</a>
+				}
+				<span>Página { strconv.Itoa(v.Page) }</span>
+				if v.HasNext {
+					<a href={ templ.URL(v.PageURL(v.Page + 1)) } rel="next">Siguiente →</a>
+				}
+			</nav>
+		}
+	}
+}
+
+// actionList es una lista de entradas del registro. showStory enlaza la historia de cada
+// acción (sobra en la página de la propia historia).
+templ actionList(actions []Action, showStory bool) {
+	if len(actions) == 0 {
+		<p>No hay acciones registradas.</p>
+	} else {
+		<ol class="mod-log">
+			for _, a := range actions {
+				<li>
+					<p>
+						<strong>{ usernameOrDeleted(a.ModeratorUsername) }</strong> · { a.Label() }
+						if a.TargetUsername != nil {
+							· <a href={ templ.URL(userModerationURL(*a.TargetUsername)) }>{ "@" + *a.TargetUsername }</a>
+						}
+						if showStory && a.StoryID != nil {
+							· <a href={ templ.URL(stories.Story{ID: *a.StoryID}.ModerationURL()) }>ver historia</a>
+						}
+					</p>
+					if a.Details != "" {
+						<p>{ a.Details }</p>
+					}
+					if a.Reason != "" {
+						<p>Motivo: { a.Reason }</p>
+					}
+					<p class="meta">{ formatDateTime(a.CreatedAt) }</p>
+				</li>
+			}
+		</ol>
+	}
+}
+
+// usernameOrDeleted es "@usuario", o un aviso si la cuenta ya no existe (las referencias del
+// registro y de los reportes quedan en NULL al borrarla).
+func usernameOrDeleted(username *string) string {
+	if username == nil {
+		return "(cuenta borrada)"
+	}
+	return "@" + *username
+}
+
+// plural escribe "1 reporte" o "3 reportes".
+func plural(n int, one, many string) string {
+	if n == 1 {
+		return "1 " + one
+	}
+	return strconv.Itoa(n) + " " + many
+}

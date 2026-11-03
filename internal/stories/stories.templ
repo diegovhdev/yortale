@@ -98,6 +98,9 @@ templ storyCard(s Story, showAuthor, authorActions bool) {
 			</p>
 		}
 		@storyMeta(s)
+		if s.IsHidden() {
+			<p class="error">Oculta por moderación{ hiddenReasonSuffix(s) }</p>
+		}
 		@storyWarnings(s)
 		@storyTags(s.CardTags(), s.HiddenTagCount())
 		if s.Synopsis != "" {

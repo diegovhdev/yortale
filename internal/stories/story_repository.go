@@ -29,7 +29,7 @@ const storyColumns = `s.id, s.author_id, u.username::text, coalesce(nullif(u.dis
 	s.kind, s.title, s.slug, coalesce(s.synopsis, ''), s.language, s.content_rating, s.warnings, s.status,
 	s.published_at, s.last_chapter_at, s.reads_count,
 	(SELECT count(*) FROM chapters c WHERE c.story_id = s.id AND c.is_published),
-	s.created_at, s.updated_at`
+	s.hidden_at, coalesce(s.hidden_reason, ''), s.created_at, s.updated_at`
 
 // storyJoins une la historia (alias s) con su autor.
 const storyJoins = `
@@ -40,7 +40,7 @@ func scanStory(row pgx.Row) (Story, error) {
 	err := row.Scan(&s.ID, &s.AuthorID, &s.AuthorUsername, &s.AuthorName,
 		&s.Genres, &s.Tags, &s.Kind, &s.Title, &s.Slug, &s.Synopsis, &s.Language, &s.ContentRating, &s.Warnings, &s.Status,
 		&s.PublishedAt, &s.LastChapterAt, &s.ReadsCount, &s.ChapterCount,
-		&s.CreatedAt, &s.UpdatedAt)
+		&s.HiddenAt, &s.HiddenReason, &s.CreatedAt, &s.UpdatedAt)
 	return s, err
 }
 
@@ -205,7 +205,7 @@ func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
 	return s, nil
 }
 
-// ListPublished devuelve las historias que no son borradores. Con query busca por texto completo
+// ListPublished devuelve las historias que no son borradores ni están ocultas. Con query busca por texto completo
 // (columna search, configuración spanish) y, para tolerar errores de escritura, por parecido
 // del título con pg_trgm: % compara con el título entero y <% con su palabra más parecida,
 // que funciona mejor con búsquedas cortas. Sin query, ordena por las actualizadas más recientemente.
@@ -214,7 +214,7 @@ func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
 func (r *StoryRepository) ListPublished(ctx context.Context, f ExploreFilter, limit, offset int) ([]Story, error) {
 	const q = `
 		SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
-		WHERE s.status <> 'draft'
+		WHERE s.status <> 'draft' AND s.hidden_at IS NULL
 			AND ($1::text = '' OR s.search @@ websearch_to_tsquery('spanish', $1)
 				OR s.title % $1 OR $1 <% s.title)
 			AND (coalesce(cardinality($2::smallint[]), 0) = 0
@@ -245,7 +245,7 @@ func (r *StoryRepository) ListPublished(ctx context.Context, f ExploreFilter, li
 	return stories, nil
 }
 
-// ListByAuthor devuelve todas las historias del autor, borradores incluidos.
+// ListByAuthor devuelve todas las historias del autor, borradores y ocultas incluidas.
 // Se ordena por created_at y no por updated_at porque cada lectura nueva toca la fila (reads_count).
 func (r *StoryRepository) ListByAuthor(ctx context.Context, authorID int64) ([]Story, error) {
 	const q = `SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
@@ -263,11 +263,11 @@ func (r *StoryRepository) ListByAuthor(ctx context.Context, authorID int64) ([]S
 	return stories, nil
 }
 
-// ListPublishedByAuthor devuelve las historias del autor que no son borradores, para su
+// ListPublishedByAuthor devuelve las historias del autor que no son borradores ni están ocultas, para su
 // perfil público, empezando por las actualizadas más recientemente.
 func (r *StoryRepository) ListPublishedByAuthor(ctx context.Context, authorID int64) ([]Story, error) {
 	const q = `SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
-		WHERE s.author_id = $1 AND s.status <> 'draft'
+		WHERE s.author_id = $1 AND s.status <> 'draft' AND s.hidden_at IS NULL
 		ORDER BY s.last_chapter_at DESC NULLS LAST, s.id DESC`
 
 	rows, err := r.db.Query(ctx, q, authorID)
@@ -305,12 +305,12 @@ func (r *StoryRepository) ListGenres(ctx context.Context) ([]Genre, error) {
 	return genres, nil
 }
 
-// GetTag busca un tag por su slug y cuenta sus historias publicadas.
+// GetTag busca un tag por su slug y cuenta sus historias publicadas (y no ocultas).
 func (r *StoryRepository) GetTag(ctx context.Context, slug string) (Tag, error) {
 	const q = `
 		SELECT t.name, t.slug,
 			(SELECT count(*) FROM story_tags st JOIN stories s ON s.id = st.story_id
-				WHERE st.tag_id = t.id AND s.status <> 'draft')
+				WHERE st.tag_id = t.id AND s.status <> 'draft' AND s.hidden_at IS NULL)
 		FROM tags t WHERE t.slug = $1`
 	var t Tag
 	err := r.db.QueryRow(ctx, q, slug).Scan(&t.Name, &t.Slug, &t.Uses)
@@ -332,7 +332,7 @@ func (r *StoryRepository) SuggestTags(ctx context.Context, slug string, limit in
 		SELECT t.name, t.slug, count(s.id)
 		FROM tags t
 			LEFT JOIN story_tags st ON st.tag_id = t.id
-			LEFT JOIN stories s ON s.id = st.story_id AND s.status <> 'draft'
+			LEFT JOIN stories s ON s.id = st.story_id AND s.status <> 'draft' AND s.hidden_at IS NULL
 		WHERE t.slug LIKE $1 || '%' OR t.slug % $1
 		GROUP BY t.id
 		ORDER BY t.slug LIKE $1 || '%' DESC, count(s.id) DESC, t.name
