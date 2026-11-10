@@ -1,5 +1,5 @@
 .env
 .claude
 docs/
-db/
+db/change_max_genres.sql
 CLAUDE.md

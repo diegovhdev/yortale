@@ -541,6 +541,23 @@ func (s *Service) ChapterForAuthor(ctx context.Context, authorID, chapterID int6
 	return story, c, nil
 }
 
+// VisibleChapter devuelve el capítulo y su historia si viewer puede leerlos, con las mismas
+// reglas que ReadChapter pero sin registrar la lectura. Lo usa el paquete comments.
+func (s *Service) VisibleChapter(ctx context.Context, viewer *auth.User, chapterID int64) (Story, Chapter, error) {
+	c, err := s.chapters.Get(ctx, chapterID)
+	if err != nil {
+		return Story{}, Chapter{}, err
+	}
+	story, err := s.Visible(ctx, viewer, c.StoryID)
+	if err != nil {
+		return Story{}, Chapter{}, err
+	}
+	if !c.IsPublished && !isAuthor(viewer, story) {
+		return Story{}, Chapter{}, ErrNotFound
+	}
+	return story, c, nil
+}
+
 func (s *Service) UpdateChapter(ctx context.Context, authorID, chapterID int64, in ChapterInput) (Story, Chapter, error) {
 	story, c, err := s.ChapterForAuthor(ctx, authorID, chapterID)
 	if err != nil {

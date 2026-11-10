@@ -9,16 +9,25 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/a-h/templ"
 	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/platform/httpx"
 )
 
 type Handler struct {
-	stories *Service
+	stories  *Service
+	comments CommentSection
 }
 
-func NewHandler(stories *Service) *Handler {
-	return &Handler{stories: stories}
+// CommentSection dibuja los comentarios al pie de un capítulo. Lo cumple *comments.Handler:
+// comments importa stories, así que stories solo conoce esta interfaz. Si falla, devuelve
+// un aviso en lugar de un error, porque los comentarios no deben impedir leer.
+type CommentSection interface {
+	ChapterSection(r *http.Request, v ChapterView) templ.Component
+}
+
+func NewHandler(stories *Service, comments CommentSection) *Handler {
+	return &Handler{stories: stories, comments: comments}
 }
 
 const genericError = "Algo salió mal. Inténtalo de nuevo en un momento."

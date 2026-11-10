@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/diegovhdev/yortale/internal/auth"
+	"github.com/diegovhdev/yortale/internal/comments"
 	"github.com/diegovhdev/yortale/internal/moderation"
 	"github.com/diegovhdev/yortale/internal/platform/config"
 	"github.com/diegovhdev/yortale/internal/platform/database"
@@ -50,6 +51,7 @@ func run() error {
 	sessions := auth.NewSessionRepository(pool)
 	authService := auth.NewService(users, sessions)
 	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), authService)
+	commentService := comments.NewService(comments.NewRepository(pool), storyService)
 	modService := moderation.NewService(moderation.NewRepository(pool), storyService, authService)
 
 	go cleanupSessions(ctx, authService)
@@ -59,6 +61,7 @@ func run() error {
 		Handler: server.NewRouter(server.Deps{
 			Auth:          authService,
 			Stories:       storyService,
+			Comments:      commentService,
 			Moderation:    modService,
 			SecureCookies: cfg.SecureCookies(),
 		}),

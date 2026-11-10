@@ -26,7 +26,7 @@ func (h *Handler) ReadChapter(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, view.Chapter.URL(view.Story), http.StatusMovedPermanently)
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, ChapterPage(view))
+	httpx.Render(w, r, http.StatusOK, ChapterPage(view, h.comments.ChapterSection(r, view)))
 }
 
 func chapterFormValues(r *http.Request, f *ChapterForm) {

@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/diegovhdev/yortale/internal/auth"
+	"github.com/diegovhdev/yortale/internal/comments"
 	"github.com/diegovhdev/yortale/internal/home"
 	"github.com/diegovhdev/yortale/internal/legal"
 	"github.com/diegovhdev/yortale/internal/moderation"
@@ -16,6 +17,7 @@ import (
 type Deps struct {
 	Auth          *auth.Service
 	Stories       *stories.Service
+	Comments      *comments.Service
 	Moderation    *moderation.Service
 	SecureCookies bool
 }
@@ -23,7 +25,8 @@ type Deps struct {
 func NewRouter(d Deps) http.Handler {
 	mux := http.NewServeMux()
 	authHandler := auth.NewHandler(d.Auth, d.SecureCookies)
-	storyHandler := stories.NewHandler(d.Stories)
+	commentHandler := comments.NewHandler(d.Comments)
+	storyHandler := stories.NewHandler(d.Stories, commentHandler)
 	modHandler := moderation.NewHandler(d.Moderation)
 
 	// member envuelve las rutas que exigen sesión iniciada; staff, las del equipo de moderación,
@@ -74,6 +77,15 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /chapters/{id}/delete", member(storyHandler.ConfirmDeleteChapter))
 	mux.Handle("POST /chapters/{id}/delete", member(storyHandler.DeleteChapter))
 	mux.Handle("POST /chapters/{id}/move", member(storyHandler.MoveChapter))
+
+	// Comentarios de los capítulos. Se muestran en la página de lectura (stories llama a
+	// commentHandler.ChapterSection); estas rutas son para escribirlos, editarlos y borrarlos.
+	mux.Handle("POST /chapters/{id}/comments", member(commentHandler.Create))
+	mux.HandleFunc("GET /comments/{id}", commentHandler.Show)
+	mux.Handle("GET /comments/{id}/edit", member(commentHandler.Edit))
+	mux.Handle("POST /comments/{id}/edit", member(commentHandler.Update))
+	mux.Handle("GET /comments/{id}/delete", member(commentHandler.ConfirmDelete))
+	mux.Handle("POST /comments/{id}/delete", member(commentHandler.Delete))
 
 	// Reportes de los lectores. La historia y el capítulo van en la query (o en el formulario)
 	// y no en la ruta, para no competir con /stories/{id}/{slug}.
