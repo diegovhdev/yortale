@@ -1,0 +1,244 @@
+package comments
+
+import (
+	"strconv"
+	"time"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// ChapterComments es la sección de comentarios al pie de un capítulo.
+templ ChapterComments(s Section) {
+	<section id="comments" class="comments">
+		<h2>Comentarios (<span id="comments-count">{ strconv.Itoa(s.Total) }</span>)</h2>
+		@postArea(s.Scope)
+		<ol id="comments-list" class="comment-list">
+			for _, t := range s.Threads {
+				@thread(s.Scope, t)
+			}
+		</ol>
+		// El CSS lo oculta en cuanto la lista tiene algún comentario, también los añadidos con htmx.
+		<p class="comments-empty hint">
+			if s.Page > 1 {
+				No hay más comentarios.
+			} else {
+				Todavía no hay comentarios. ¡Sé el primero en comentar!
+			}
+		</p>
+		if s.Page > 1 || s.HasNext {
+			<nav class="pagination" aria-label="Páginas de comentarios">
+				if s.Page > 1 {
+					<a href={ templ.URL(s.PageURL(s.Page-1, "comments")) } rel="prev">← Más recientes</a>
+				}
+				<span>Página { strconv.Itoa(s.Page) }</span>
+				if s.HasNext {
+					<a href={ templ.URL(s.PageURL(s.Page+1, "comments")) } rel="next">Más antiguos →</a>
+				}
+			</nav>
+		}
+	</section>
+}
+
+// postArea es el formulario para comentar, o el motivo por el que no se puede.
+templ postArea(s Scope) {
+	switch {
+		case s.CanPost():
+			@FormFragment(newForm(s.Chapter.ID))
+		case s.Viewer == nil:
+			<p class="hint"><a href={ templ.URL(s.LoginURL()) }>Inicia sesión</a> para comentar.</p>
+		case s.Story.IsHidden():
+			<p class="hint">Esta historia está oculta por moderación: no admite comentarios nuevos.</p>
+		default:
+			<p class="hint">Los comentarios se abren cuando el capítulo y la historia se publican.</p>
+	}
+}
+
+// thread es un comentario principal con sus respuestas y el formulario para responder.
+// <details> abre el formulario sin JS.
+templ thread(s Scope, c Comment) {
+	<li class="comment-thread">
+		@Article(s, c)
+		<ol id={ c.RepliesID() } class="comment-replies">
+			for _, reply := range c.Replies {
+				<li>
+					@Article(s, reply)
+				</li>
+			}
+		</ol>
+		if s.CanPost() && !c.Deleted {
+			<details class="comment-reply">
+				<summary>Responder</summary>
+				@FormFragment(replyForm(s.Chapter.ID, c.ID))
+			</details>
+		}
+	</li>
+}
+
+// Article es un comentario suelto. Es lo que sustituyen editar y borrar con htmx.
+templ Article(s Scope, c Comment) {
+	if c.Deleted {
+		<article id={ c.Anchor() } class="comment comment-deleted">
+			<p>Comentario borrado.</p>
+		</article>
+	} else {
+		<article id={ c.Anchor() } class="comment">
+			<header class="comment-meta">
+				if c.AuthorURL() != "" {
+					<a href={ templ.URL(c.AuthorURL()) } class="comment-author">{ c.AuthorName() }</a>
+				} else {
+					<span class="comment-author">{ c.AuthorName() }</span>
+				}
+				if s.IsStoryAuthor(c) {
+					<span class="badge">Autor</span>
+				}
+				<a href={ templ.URL(s.ChapterURL() + "#" + c.Anchor()) } class="comment-time">
+					<time datetime={ c.CreatedAt.UTC().Format(time.RFC3339) }>{ formatDateTime(c.CreatedAt) }</time>
+				</a>
+				if c.Edited() {
+					<span title={ "Editado el " + formatDateTime(c.UpdatedAt) }>(editado)</span>
+				}
+			</header>
+			<div class="comment-body">{ c.Body }</div>
+			if s.CanEdit(c) || s.CanDelete(c) {
+				<p class="comment-actions">
+					if s.CanEdit(c) {
+						<a
+							href={ templ.URL(c.EditURL()) }
+							hx-get={ c.EditURL() }
+							hx-target="closest article"
+							hx-swap="outerHTML"
+						>Editar</a>
+					}
+					if s.CanDelete(c) {
+						// Sin JS lleva a la página de confirmación; con htmx pregunta y envía el POST.
+						<a
+							href={ templ.URL(c.DeleteURL()) }
+							hx-post={ c.DeleteURL() }
+							hx-confirm="¿Borrar este comentario?"
+							hx-target="closest article"
+							hx-swap="outerHTML"
+						>Borrar</a>
+					}
+				</p>
+			}
+		</article>
+	}
+}
+
+// FormFragment es el formulario de comentar, responder o editar. Al editar en el sitio,
+// «Cancelar» vuelve a pedir el comentario con htmx.
+templ FormFragment(f Form) {
+	<form
+		id={ f.ID }
+		class="comment-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		if f.ParentID != 0 {
+			<input type="hidden" name="parent_id" value={ strconv.FormatInt(f.ParentID, 10) }/>
+		}
+		if f.Inline {
+			<input type="hidden" name="inline" value="1"/>
+		}
+		<div class="field">
+			<label for={ f.BodyID() }>{ f.Label() }</label>
+			<textarea
+				id={ f.BodyID() }
+				name="body"
+				rows="4"
+				maxlength={ strconv.Itoa(maxBodyRunes) }
+				required
+				if f.Errors["body"] != "" {
+					aria-invalid="true"
+					aria-describedby={ f.BodyID() + "-error" }
+				}
+			>{ f.Body }</textarea>
+			if f.Errors["body"] != "" {
+				<small id={ f.BodyID() + "-error" } class="error">{ f.Errors["body"] }</small>
+			}
+		</div>
+		<button type="submit">{ f.SubmitLabel() }</button>
+		if f.IsEdit() {
+			if f.Inline {
+				<a
+					href={ templ.URL(f.CancelURL) }
+					hx-get={ "/comments/" + strconv.FormatInt(f.CommentID, 10) }
+					hx-target="closest form"
+					hx-swap="outerHTML"
+				>Cancelar</a>
+			} else {
+				<a href={ templ.URL(f.CancelURL) }>Cancelar</a>
+			}
+		}
+		<span class="htmx-indicator">Enviando…</span>
+	</form>
+}
+
+// Created es la respuesta de htmx al publicar: el formulario vacío en su sitio y, con
+// <hx-partial>, el comentario nuevo en la lista y el contador al día.
+templ Created(f Form, s Scope, c Comment, total int) {
+	@FormFragment(f)
+	if c.ParentID != nil {
+		<hx-partial hx-target={ "#replies-" + strconv.FormatInt(*c.ParentID, 10) } hx-swap="beforeend">
+			<li>
+				@Article(s, c)
+			</li>
+		</hx-partial>
+	} else {
+		<hx-partial hx-target="#comments-list" hx-swap="afterbegin">
+			@thread(s, c)
+		</hx-partial>
+	}
+	if total >= 0 {
+		<hx-partial hx-target="#comments-count" hx-swap="innerHTML">{ strconv.Itoa(total) }</hx-partial>
+	}
+}
+
+// SectionUnavailable sustituye a la sección si los comentarios no se pudieron cargar.
+templ SectionUnavailable() {
+	<section id="comments" class="comments">
+		<h2>Comentarios</h2>
+		<p class="error">No se pudieron cargar los comentarios. Inténtalo de nuevo en un momento.</p>
+	</section>
+}
+
+// FormPage muestra el formulario con sus errores cuando se envió sin JS.
+templ FormPage(f Form, s Scope) {
+	@components.Layout("Comentar · " + s.Chapter.Title) {
+		<h1>Comentar</h1>
+		<p>Capítulo: <a href={ templ.URL(s.ChapterURL() + "#comments") }>{ s.Chapter.Title }</a>, de { s.Story.Title }</p>
+		@FormFragment(f)
+	}
+}
+
+templ EditPage(f Form, t Target) {
+	@components.Layout("Editar comentario") {
+		<h1>Editar comentario</h1>
+		<p>Capítulo: <a href={ templ.URL(t.ChapterURL()) }>{ t.Chapter.Title }</a>, de { t.Story.Title }</p>
+		@FormFragment(f)
+	}
+}
+
+templ DeletePage(t Target) {
+	@components.Layout("Borrar comentario") {
+		<h1>¿Borrar este comentario?</h1>
+		<p>Capítulo: <a href={ templ.URL(t.ChapterURL()) }>{ t.Chapter.Title }</a>, de { t.Story.Title }</p>
+		@Article(Scope{Story: t.Story, Chapter: t.Chapter}, t.Comment)
+		if t.Comment.IsReply() {
+			<p class="hint">El comentario desaparecerá del hilo.</p>
+		} else {
+			<p class="hint">Si tiene respuestas, se quedan, y en su lugar se verá «Comentario borrado».</p>
+		}
+		<form method="post" action={ templ.URL(t.Comment.DeleteURL()) }>
+			<button type="submit">Borrar comentario</button>
+			<a href={ templ.URL(t.PageURL(1, t.Comment.Anchor())) }>Cancelar</a>
+		</form>
+	}
+}
