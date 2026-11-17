@@ -30,9 +30,10 @@ const (
 	minSynopsisWords = 20
 	// maxSlugAttempts limita cuántos sufijos (-2, -3...) se prueban si el autor repite título.
 	maxSlugAttempts = 50
-	// genresTTL es cuánto se guardan en memoria los géneros. Solo cambian a mano en la base
-	// de datos, así que con esto un cambio se ve en unos minutos sin reiniciar el servidor.
-	genresTTL = 10 * time.Minute
+	// cacheTTL es cuánto se guardan en memoria los géneros y los idiomas. Lo que cambia un
+	// administrador se ve al momento (ver cached.reset); lo cambiado a mano en la base de
+	// datos, en unos minutos sin reiniciar el servidor.
+	cacheTTL = 10 * time.Minute
 )
 
 type storyStore interface {
@@ -44,6 +45,8 @@ type storyStore interface {
 	ListPublishedByAuthor(ctx context.Context, authorID int64) ([]Story, error)
 	Delete(ctx context.Context, id, authorID int64) error
 	ListGenres(ctx context.Context) ([]Genre, error)
+	CreateGenre(ctx context.Context, g Genre) error
+	UpdateGenre(ctx context.Context, g Genre) error
 	GetTag(ctx context.Context, slug string) (Tag, error)
 	SuggestTags(ctx context.Context, slug string, limit int) ([]Tag, error)
 	RecordRead(ctx context.Context, userID, storyID, chapterID int64) error
@@ -59,23 +62,58 @@ type chapterStore interface {
 	Move(ctx context.Context, id int64, delta int) error
 }
 
+type languageStore interface {
+	List(ctx context.Context) ([]Language, error)
+	Create(ctx context.Context, l Language) error
+	Update(ctx context.Context, l Language) error
+}
+
 // authorStore busca a los autores para su perfil público. Lo cumple *auth.Service.
 type authorStore interface {
 	UserByUsername(ctx context.Context, username string) (auth.User, error)
 }
 
 type Service struct {
-	stories  storyStore
-	chapters chapterStore
-	authors  authorStore
+	stories   storyStore
+	chapters  chapterStore
+	languages languageStore
+	authors   authorStore
 
-	genresMu      sync.Mutex
-	genres        []Genre
-	genresExpires time.Time
+	genreCache    cached[Genre]
+	languageCache cached[Language]
 }
 
-func NewService(stories storyStore, chapters chapterStore, authors authorStore) *Service {
-	return &Service{stories: stories, chapters: chapters, authors: authors}
+func NewService(stories storyStore, chapters chapterStore, languages languageStore, authors authorStore) *Service {
+	return &Service{stories: stories, chapters: chapters, languages: languages, authors: authors}
+}
+
+// cached guarda en memoria una lista que cambia poco (géneros, idiomas) durante cacheTTL.
+type cached[T any] struct {
+	mu      sync.Mutex
+	items   []T
+	expires time.Time
+}
+
+// get devuelve la lista desde la memoria, o la carga con load si no está o ya caducó. Cada
+// llamada recibe su propia copia, así que puede modificarla.
+func (c *cached[T]) get(ctx context.Context, load func(context.Context) ([]T, error)) ([]T, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.items == nil || time.Now().After(c.expires) {
+		items, err := load(ctx)
+		if err != nil {
+			return nil, err
+		}
+		c.items, c.expires = items, time.Now().Add(cacheTTL)
+	}
+	return slices.Clone(c.items), nil
+}
+
+// reset hace que la próxima llamada a get vuelva a cargar la lista.
+func (c *cached[T]) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.items = nil
 }
 
 func isAuthor(user *auth.User, s Story) bool {
@@ -101,25 +139,22 @@ type StoryInput struct {
 	Status        string   // se ignora al crear: toda historia empieza como borrador
 }
 
-// Genres devuelve todos los géneros, desde la memoria mientras no pase genresTTL.
-// Cada llamada recibe su propia copia, así que puede modificarla.
+// Genres devuelve todos los géneros, activos o no, desde la memoria mientras no pase cacheTTL
+// o un administrador cambie alguno.
 func (s *Service) Genres(ctx context.Context) ([]Genre, error) {
-	s.genresMu.Lock()
-	defer s.genresMu.Unlock()
-	if s.genres == nil || time.Now().After(s.genresExpires) {
-		genres, err := s.stories.ListGenres(ctx)
-		if err != nil {
-			return nil, err
-		}
-		s.genres, s.genresExpires = genres, time.Now().Add(genresTTL)
-	}
-	return slices.Clone(s.genres), nil
+	return s.genreCache.get(ctx, s.stories.ListGenres)
+}
+
+// Languages devuelve todos los idiomas, activos o no, desde la memoria mientras no pase
+// cacheTTL o un administrador cambie alguno.
+func (s *Service) Languages(ctx context.Context) ([]Language, error) {
+	return s.languageCache.get(ctx, s.languages.List)
 }
 
 // Create valida los datos y crea la historia como borrador. Devuelve auth.ValidationErrors si hay errores.
 func (s *Service) Create(ctx context.Context, authorID int64, in StoryInput) (Story, error) {
 	in.Status = StatusDraft
-	p, err := s.validateStory(ctx, in)
+	p, err := s.validateStory(ctx, in, Story{})
 	if err != nil {
 		return Story{}, err
 	}
@@ -138,7 +173,7 @@ func (s *Service) Update(ctx context.Context, authorID, id int64, in StoryInput)
 	if err != nil {
 		return Story{}, err
 	}
-	p, err := s.validateStory(ctx, in)
+	p, err := s.validateStory(ctx, in, current)
 	var verrs auth.ValidationErrors
 	if err != nil && !errors.As(err, &verrs) {
 		return Story{}, err
@@ -180,7 +215,9 @@ func saveWithUniqueSlug(base string, save func(slug string) (Story, error)) (Sto
 	return Story{}, fmt.Errorf("no se encontró un slug libre para %q", base)
 }
 
-func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams, error) {
+// validateStory comprueba los datos de la historia. current es como está guardada (vacía al
+// crearla): su idioma y sus géneros se aceptan aunque un administrador los haya desactivado.
+func (s *Service) validateStory(ctx context.Context, in StoryInput, current Story) (StoryParams, error) {
 	p := StoryParams{
 		Title:         strings.TrimSpace(in.Title),
 		Synopsis:      normalizeText(in.Synopsis),
@@ -207,9 +244,6 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 	if !validOption(Kinds, p.Kind) {
 		errs["kind"] = "Elige si la historia es original o un fanfic."
 	}
-	if !validOption(Languages, p.Language) {
-		errs["language"] = "Elige un idioma de la lista."
-	}
 	if !validOption(ContentRatings, p.ContentRating) {
 		errs["content_rating"] = "Elige una clasificación de la lista."
 	}
@@ -219,8 +253,15 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 
 	validateWarnings(in.Warnings, &p, errs)
 	validateTags(in.Tags, &p, errs)
-	if err := s.validateGenres(ctx, in.GenreIDs, &p, errs); err != nil {
+	if err := s.validateGenres(ctx, in.GenreIDs, genreIDs(current.Genres), &p, errs); err != nil {
 		return StoryParams{}, err
+	}
+	langs, err := s.Languages(ctx)
+	if err != nil {
+		return StoryParams{}, err
+	}
+	if !validOption(languageOptions(langs, current.Language), p.Language) {
+		errs["language"] = "Elige un idioma de la lista."
 	}
 
 	if len(errs) > 0 {
@@ -266,7 +307,8 @@ func downgradeIfBlocked(story Story, p *ChapterParams) {
 // validateGenres pasa a p.GenreIDs los géneros elegidos, en el orden en que llegan: con JS, el
 // orden en que el autor los marcó; sin JS, el alfabético del formulario. Los vacíos se ignoran.
 // Todos los errores van al campo genres.
-func (s *Service) validateGenres(ctx context.Context, ids []string, p *StoryParams, errs auth.ValidationErrors) error {
+// keep son los géneros que la historia ya tiene, que se aceptan aunque estén inactivos.
+func (s *Service) validateGenres(ctx context.Context, ids []string, keep []int16, p *StoryParams, errs auth.ValidationErrors) error {
 	var genres []Genre
 	for _, raw := range ids {
 		if raw == "" {
@@ -281,6 +323,7 @@ func (s *Service) validateGenres(ctx context.Context, ids []string, p *StoryPara
 			if genres, err = s.Genres(ctx); err != nil {
 				return err
 			}
+			genres = selectableGenres(genres, keep)
 		}
 		genreID := int16(id)
 		switch {
@@ -710,4 +753,170 @@ func (s *Service) ReadChapter(ctx context.Context, viewer *auth.User, storyID, c
 		}
 	}
 	return v, nil
+}
+
+// ---------- Idiomas ----------
+
+// LanguageInput son los valores del formulario de idioma, tal como llegan. Code solo se usa
+// al crear: después no cambia nunca, porque las historias apuntan a él.
+type LanguageInput struct {
+	Code   string
+	Name   string
+	Active bool
+}
+
+func isAdmin(user *auth.User) bool {
+	return user != nil && user.IsAdmin()
+}
+
+// Language busca un idioma por su código para editarlo. Solo para administradores; a
+// cualquier otro le responde ErrNotFound, como si no existiera.
+func (s *Service) Language(ctx context.Context, user *auth.User, code string) (Language, error) {
+	if !isAdmin(user) {
+		return Language{}, ErrNotFound
+	}
+	langs, err := s.Languages(ctx)
+	if err != nil {
+		return Language{}, err
+	}
+	for _, l := range langs {
+		if l.Code == code {
+			return l, nil
+		}
+	}
+	return Language{}, ErrNotFound
+}
+
+// CreateLanguage agrega un idioma. Devuelve auth.ValidationErrors si hay errores.
+func (s *Service) CreateLanguage(ctx context.Context, user *auth.User, in LanguageInput) error {
+	if !isAdmin(user) {
+		return ErrNotFound
+	}
+	l := Language{Code: normalizeLanguageCode(in.Code), Name: strings.TrimSpace(in.Name), Active: in.Active}
+	errs := auth.ValidationErrors{}
+	if !languageCodePattern.MatchString(l.Code) {
+		errs["code"] = "Escribe un código ISO 639 de 2 o 3 letras, con una región opcional: es, ast, pt-BR."
+	}
+	validateLanguageName(l.Name, errs)
+	if len(errs) > 0 {
+		return errs
+	}
+	return s.saveLanguage(ctx, l, s.languages.Create)
+}
+
+// UpdateLanguage cambia el nombre del idioma y si está activo. Devuelve auth.ValidationErrors
+// si hay errores y ErrNotFound si el idioma no existe.
+func (s *Service) UpdateLanguage(ctx context.Context, user *auth.User, code string, in LanguageInput) error {
+	if !isAdmin(user) {
+		return ErrNotFound
+	}
+	l := Language{Code: code, Name: strings.TrimSpace(in.Name), Active: in.Active}
+	errs := auth.ValidationErrors{}
+	validateLanguageName(l.Name, errs)
+	if len(errs) > 0 {
+		return errs
+	}
+	return s.saveLanguage(ctx, l, s.languages.Update)
+}
+
+// saveLanguage guarda el idioma, traduce los duplicados a errores de su campo y vacía la caché
+// para que el cambio se vea en el formulario de historias al momento.
+func (s *Service) saveLanguage(ctx context.Context, l Language, save func(context.Context, Language) error) error {
+	err := save(ctx, l)
+	switch {
+	case errors.Is(err, ErrLanguageExists):
+		return auth.ValidationErrors{"code": "Ya hay un idioma con ese código."}
+	case errors.Is(err, ErrLanguageNameTaken):
+		return auth.ValidationErrors{"name": "Ya hay un idioma con ese nombre."}
+	case err != nil:
+		return err
+	}
+	s.languageCache.reset()
+	return nil
+}
+
+func validateLanguageName(name string, errs auth.ValidationErrors) {
+	switch n := utf8.RuneCountInString(name); {
+	case n == 0:
+		errs["name"] = "Escribe el nombre del idioma."
+	case n > maxLanguageNameRunes:
+		errs["name"] = fmt.Sprintf("El nombre no puede tener más de %d caracteres.", maxLanguageNameRunes)
+	}
+}
+
+// normalizeLanguageCode acepta el código escrito de cualquier forma ("PT_br", " Es ") y lo
+// deja como lo guarda la tabla: idioma en minúsculas y región en mayúsculas (pt-BR).
+func normalizeLanguageCode(code string) string {
+	lang, region, found := strings.Cut(strings.ReplaceAll(strings.TrimSpace(code), "_", "-"), "-")
+	if !found {
+		return strings.ToLower(lang)
+	}
+	return strings.ToLower(lang) + "-" + strings.ToUpper(region)
+}
+
+// ---------- Géneros ----------
+
+// GenreInput son los valores del formulario de género, tal como llegan.
+type GenreInput struct {
+	Name   string
+	Active bool
+}
+
+// Genre busca un género por su id para editarlo. Solo para administradores; a cualquier otro
+// le responde ErrNotFound, como si no existiera.
+func (s *Service) Genre(ctx context.Context, user *auth.User, id int16) (Genre, error) {
+	if !isAdmin(user) {
+		return Genre{}, ErrNotFound
+	}
+	genres, err := s.Genres(ctx)
+	if err != nil {
+		return Genre{}, err
+	}
+	for _, g := range genres {
+		if g.ID == id {
+			return g, nil
+		}
+	}
+	return Genre{}, ErrNotFound
+}
+
+// CreateGenre agrega un género. Devuelve auth.ValidationErrors si hay errores.
+func (s *Service) CreateGenre(ctx context.Context, user *auth.User, in GenreInput) error {
+	if !isAdmin(user) {
+		return ErrNotFound
+	}
+	return s.saveGenre(ctx, Genre{Active: in.Active}, in, s.stories.CreateGenre)
+}
+
+// UpdateGenre renombra el género o cambia si está activo. Devuelve auth.ValidationErrors si
+// hay errores y ErrNotFound si el género no existe.
+func (s *Service) UpdateGenre(ctx context.Context, user *auth.User, id int16, in GenreInput) error {
+	if !isAdmin(user) {
+		return ErrNotFound
+	}
+	return s.saveGenre(ctx, Genre{ID: id, Active: in.Active}, in, s.stories.UpdateGenre)
+}
+
+// saveGenre valida el nombre, calcula el slug, guarda el género y vacía la caché para que el
+// cambio se vea al momento en el formulario de historias y en explorar.
+func (s *Service) saveGenre(ctx context.Context, g Genre, in GenreInput, save func(context.Context, Genre) error) error {
+	g.Name = strings.TrimSpace(in.Name)
+	g.Slug = TagSlug(g.Name)
+	switch n := utf8.RuneCountInString(g.Name); {
+	case n == 0:
+		return auth.ValidationErrors{"name": "Escribe el nombre del género."}
+	case n > maxGenreNameRunes:
+		return auth.ValidationErrors{"name": fmt.Sprintf("El nombre no puede tener más de %d caracteres.", maxGenreNameRunes)}
+	case g.Slug == "":
+		return auth.ValidationErrors{"name": "El nombre necesita al menos una letra o un número."}
+	}
+	err := save(ctx, g)
+	switch {
+	case errors.Is(err, ErrGenreNameTaken):
+		return auth.ValidationErrors{"name": "Ya hay un género con ese nombre (sin contar tildes ni mayúsculas)."}
+	case err != nil:
+		return err
+	}
+	s.genreCache.reset()
+	return nil
 }

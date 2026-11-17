@@ -267,7 +267,7 @@ func StoryFormFragment(f StoryForm) templ.Component {
 			Name:     "language",
 			Value:    f.Language,
 			Error:    f.Errors["language"],
-			Options:  Languages,
+			Options:  f.LanguageOptions(),
 			Required: true,
 		}).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {

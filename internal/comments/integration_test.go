@@ -16,7 +16,7 @@ func TestCommentsIntegration(t *testing.T) {
 	pool := dbtest.New(t)
 	ctx := context.Background()
 	users := auth.NewService(auth.NewUserRepository(pool), auth.NewSessionRepository(pool))
-	storySvc := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), users)
+	storySvc := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), stories.NewLanguageRepository(pool), users)
 	svc := NewService(NewRepository(pool), storySvc)
 
 	must := func(err error) {

@@ -12,7 +12,7 @@ Una relación `|o` significa que la clave foránea admite `NULL`.
 |---|---|---|
 | Usuarios | `users`, `sessions` | En uso |
 | Usuarios | `follows` | Planificada |
-| Clasificación | `genres`, `tags`, `story_genres`, `story_tags` | En uso |
+| Clasificación | `genres`, `tags`, `story_genres`, `story_tags`, `languages` | En uso |
 | Historias | `stories`, `chapters` | En uso |
 | Interacción | `comments` | En uso (solo comentarios en capítulos) |
 | Interacción | `story_ratings` | Planificada |
@@ -29,6 +29,7 @@ erDiagram
     users ||--o{ follows : "sigue"
     users ||--o{ follows : "es seguido"
     users ||--o{ stories : "escribe"
+    languages ||--o{ stories : "idioma"
 
     stories ||--o{ chapters : "contiene"
     stories ||--o{ story_genres : ""
@@ -105,11 +106,14 @@ erDiagram
 ## Historias, capítulos y clasificación
 
 Una historia tiene hasta 3 géneros y hasta 20 tags; `position` es el orden que eligió el autor.
-`search` es un `tsvector` generado (título con más peso que la sinopsis).
+`search` es un `tsvector` generado (título con más peso que la sinopsis). Los géneros y los idiomas los
+gestiona un administrador: no se borran, y uno inactivo no se ofrece para elegirlo, pero las historias que
+ya lo tienen lo conservan.
 
 ```mermaid
 erDiagram
     users ||--o{ stories : "escribe"
+    languages ||--o{ stories : "idioma"
     stories ||--o{ chapters : "contiene"
     stories ||--o{ story_genres : ""
     genres ||--o{ story_genres : ""
@@ -124,7 +128,7 @@ erDiagram
         text synopsis "máx. 4000"
         text cover_url "nullable"
         text kind "original | fanfic"
-        text language
+        text language FK "languages.code"
         text content_rating "general | teen | mature"
         text_array warnings "text[]: none, declined, graphic_violence…"
         text status "draft | ongoing | completed | hiatus"
@@ -149,10 +153,16 @@ erDiagram
         timestamptz created_at
         timestamptz updated_at
     }
+    languages {
+        text code PK "es, ast, pt-BR"
+        text name UK "endónimo, 1 a 50"
+        boolean active
+    }
     genres {
         smallint id PK
-        text name UK
-        text slug UK
+        text name UK "1 a 50"
+        text slug UK "TagSlug(name)"
+        boolean active
     }
     story_genres {
         bigint story_id PK, FK

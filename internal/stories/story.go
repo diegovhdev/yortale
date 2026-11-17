@@ -4,6 +4,8 @@ package stories
 import (
 	"fmt"
 	"net/url"
+	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,7 +26,8 @@ type Story struct {
 	Title          string
 	Slug           string
 	Synopsis       string
-	Language       string
+	Language       string // code de languages
+	LanguageName   string
 	ContentRating  string
 	Warnings       []string // valores de ContentWarnings, en su orden; al menos uno
 	Status         string
@@ -39,10 +42,38 @@ type Story struct {
 	UpdatedAt    time.Time
 }
 
+// Genre es un género. Active solo se carga en la lista completa (Service.Genres); en los
+// géneros de una historia queda en false.
 type Genre struct {
-	ID   int16
-	Name string
-	Slug string
+	ID     int16
+	Name   string
+	Slug   string
+	Active bool
+}
+
+// maxGenreNameRunes debe coincidir con el CHECK de genres.name.
+const maxGenreNameRunes = 50
+
+func (g Genre) EditURL() string { return fmt.Sprintf("/admin/genres/%d/edit", g.ID) }
+
+// selectableGenres son los géneros que se pueden marcar: los activos, más los de keep aunque
+// estén inactivos (los que la historia ya tiene, o los que ya están en el filtro de explorar).
+func selectableGenres(genres []Genre, keep []int16) []Genre {
+	var out []Genre
+	for _, g := range genres {
+		if g.Active || slices.Contains(keep, g.ID) {
+			out = append(out, g)
+		}
+	}
+	return out
+}
+
+func genreIDs(genres []Genre) []int16 {
+	ids := make([]int16, len(genres))
+	for i, g := range genres {
+		ids[i] = g.ID
+	}
+	return ids
 }
 
 // Tag es una etiqueta libre. Slug es su identidad (ver TagSlug); Name, cómo se muestra.
@@ -112,16 +143,40 @@ var (
 		{Value: WarningNone, Label: "No aplica ninguna",
 			Description: "La historia no contiene nada de lo anterior. No se puede combinar con otras."},
 	}
-	// La columna language no tiene CHECK; esta lista es la única validación.
-	Languages = []components.Option{
-		{Value: "es", Label: "Español"},
-		{Value: "en", Label: "English"},
-		{Value: "pt", Label: "Português"},
-		{Value: "fr", Label: "Français"},
-		{Value: "it", Label: "Italiano"},
-		{Value: "de", Label: "Deutsch"},
-	}
 )
+
+// Language es un idioma de la tabla languages. Code no cambia nunca (es la clave a la que
+// apunta stories.language); Name es el endónimo. Un idioma inactivo no se ofrece para
+// historias nuevas, pero las que ya lo tienen lo conservan.
+type Language struct {
+	Code   string
+	Name   string
+	Active bool
+}
+
+// defaultLanguage es el idioma que el formulario propone al crear una historia, el mismo que
+// el DEFAULT de stories.language.
+const defaultLanguage = "es"
+
+// languageCodePattern y maxLanguageNameRunes deben coincidir con los CHECK de languages:
+// ISO 639 (2 o 3 letras minúsculas) con una región opcional de 2 mayúsculas (pt-BR).
+var languageCodePattern = regexp.MustCompile(`^[a-z]{2,3}(-[A-Z]{2})?$`)
+
+const maxLanguageNameRunes = 50
+
+func (l Language) EditURL() string { return "/admin/languages/" + url.PathEscape(l.Code) + "/edit" }
+
+// languageOptions son los idiomas que se pueden elegir en el formulario: los activos, más
+// keep (el idioma que la historia ya tiene) aunque esté inactivo, para no cambiárselo al editar.
+func languageOptions(langs []Language, keep string) []components.Option {
+	var opts []components.Option
+	for _, l := range langs {
+		if l.Active || l.Code == keep {
+			opts = append(opts, components.Option{Value: l.Code, Label: l.Name})
+		}
+	}
+	return opts
+}
 
 // URL es la dirección canónica: /stories/{id}/{slug}. Solo el id se usa para buscar.
 func (s Story) URL() string {
@@ -170,7 +225,7 @@ func (s Story) HiddenTagCount() int {
 func (s Story) KindLabel() string          { return optionLabel(Kinds, s.Kind) }
 func (s Story) StatusLabel() string        { return optionLabel(Statuses, s.Status) }
 func (s Story) ContentRatingLabel() string { return optionLabel(ContentRatings, s.ContentRating) }
-func (s Story) LanguageLabel() string      { return optionLabel(Languages, s.Language) }
+func (s Story) LanguageLabel() string      { return s.LanguageName }
 
 // WarningLabels son las advertencias de la historia, en texto.
 func (s Story) WarningLabels() []string {

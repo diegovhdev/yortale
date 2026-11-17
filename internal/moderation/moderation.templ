@@ -4,15 +4,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/stories"
 	"github.com/diegovhdev/yortale/web/components"
 )
 
-// modNav son los enlaces entre las páginas del panel.
+// modNav son los enlaces entre las páginas del panel. Los administradores ven además las
+// páginas de géneros e idiomas, que sirve stories.
 templ modNav() {
 	<p class="actions">
 		<a href="/moderation">Reportes pendientes</a>
 		<a href="/moderation/log">Registro de acciones</a>
+		if u := auth.CurrentUser(ctx); u != nil && u.IsAdmin() {
+			<a href="/admin/genres">Géneros</a>
+			<a href="/admin/languages">Idiomas</a>
+		}
 	</p>
 }
 

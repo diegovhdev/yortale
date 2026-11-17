@@ -14,4 +14,8 @@ var (
 	// ErrNotLastPublished: solo el último capítulo publicado puede volver a borrador, para no
 	// dejar huecos en lo que ya leen los lectores.
 	ErrNotLastPublished = errors.New("solo el último capítulo publicado puede volver a borrador")
+
+	ErrLanguageExists    = errors.New("ya existe un idioma con ese código")
+	ErrLanguageNameTaken = errors.New("ya existe un idioma con ese nombre")
+	ErrGenreNameTaken    = errors.New("ya existe un género con ese nombre")
 )

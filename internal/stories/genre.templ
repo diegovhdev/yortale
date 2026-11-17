@@ -1,0 +1,107 @@
+package stories
+
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
+
+// adminNav son los enlaces entre las páginas de administración.
+templ adminNav() {
+	<p class="actions">
+		<a href="/moderation">Volver a moderación</a>
+		<a href={ templ.URL(genresURL) }>Géneros</a>
+		<a href={ templ.URL(languagesURL) }>Idiomas</a>
+	</p>
+}
+
+// GenresPage es la página de administración de géneros: todos, activos o no, y el formulario
+// para agregar uno nuevo.
+templ GenresPage(genres []Genre, f GenreForm) {
+	@components.Layout("Géneros") {
+		<h1>Géneros</h1>
+		@adminNav()
+		<p class="hint">
+			Los autores marcan hasta { strconv.Itoa(maxGenres) } en cada historia, y los lectores filtran
+			con ellos en explorar. Conviene que sean pocos y amplios: para lo más concreto están los tags.
+			Desactivar uno lo quita del formulario y del filtro, pero las historias que ya lo tienen lo conservan.
+		</p>
+		<table class="data-table">
+			<thead>
+				<tr>
+					<th scope="col">Nombre</th>
+					<th scope="col">Estado</th>
+					<th scope="col"><span class="sr-only">Acciones</span></th>
+				</tr>
+			</thead>
+			<tbody>
+				for _, g := range genres {
+					<tr>
+						<td><a href={ templ.URL(g.URL()) }>{ g.Name }</a></td>
+						<td>
+							if g.Active {
+								Activo
+							} else {
+								<span class="hint">Inactivo</span>
+							}
+						</td>
+						<td><a href={ templ.URL(g.EditURL()) }>Editar</a></td>
+					</tr>
+				}
+			</tbody>
+		</table>
+		<h2>Agregar género</h2>
+		@GenreFormFragment(f)
+	}
+}
+
+// EditGenrePage es la página para renombrar un género o activarlo y desactivarlo.
+templ EditGenrePage(f GenreForm) {
+	@components.Layout("Editar género") {
+		<h1>Editar género</h1>
+		@GenreFormFragment(f)
+	}
+}
+
+// GenreFormFragment es el formulario de género; htmx lo reemplaza completo si hay errores.
+templ GenreFormFragment(f GenreForm) {
+	<form
+		id="genre-form"
+		action={ templ.URL(f.Action) }
+		method="post"
+		hx-post={ f.Action }
+		hx-target="this"
+		hx-swap="outerHTML"
+		hx-disable="find button"
+	>
+		if f.General != "" {
+			<p class="error" role="alert">{ f.General }</p>
+		}
+		@components.Field(components.FieldProps{
+			Label:    "Nombre",
+			Name:     "name",
+			Type:     "text",
+			Value:    f.Name,
+			Error:    f.Errors["name"],
+			Required: true,
+			Attrs:    templ.Attributes{"maxlength": strconv.Itoa(maxGenreNameRunes)},
+		})
+		<div class="field">
+			<label>
+				<input type="checkbox" name="active" value="1" checked?={ f.Active }/>
+				Activo (los autores pueden elegirlo y los lectores, filtrar por él)
+			</label>
+		</div>
+		<button type="submit">
+			if f.IsNew {
+				Agregar género
+			} else {
+				Guardar cambios
+			}
+		</button>
+		if !f.IsNew {
+			<a href={ templ.URL(genresURL) }>Cancelar</a>
+		}
+		<span class="htmx-indicator">Guardando…</span>
+	</form>
+}

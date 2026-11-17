@@ -19,7 +19,7 @@ func TestMoveChapterHTTPIntegration(t *testing.T) {
 	pool := dbtest.New(t)
 	ctx := context.Background()
 	users := auth.NewService(auth.NewUserRepository(pool), auth.NewSessionRepository(pool))
-	svc := NewService(NewStoryRepository(pool), NewChapterRepository(pool), users)
+	svc := NewService(NewStoryRepository(pool), NewChapterRepository(pool), NewLanguageRepository(pool), users)
 	author := createUser(t, pool, "autora")
 	other := createUser(t, pool, "otra")
 	must := func(err error) {

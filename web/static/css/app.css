@@ -1109,3 +1109,26 @@ a.comment-author:hover {
 .comment-list .comment-form textarea {
   min-height: 5rem;
 }
+
+/* Tablas de datos de las páginas de administración (idiomas). En pantallas estrechas se
+   desplaza la tabla, no la página. */
+.data-table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+  margin-bottom: 2rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.5rem 1rem 0.5rem 0;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.data-table th {
+  color: var(--color-text-muted);
+  font-weight: 600;
+  font-size: 0.85rem;
+}

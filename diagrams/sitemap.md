@@ -12,6 +12,7 @@ Leyenda de colores (quién puede entrar):
 - **Con sesión**: hace falta iniciar sesión; si no, se redirige a `/login?next=…`.
 - **Autor**: solo el autor de la historia (con sesión).
 - **Moderación**: moderadores y administradores.
+- **Administración**: solo administradores.
 
 ## Estructura
 
@@ -60,6 +61,13 @@ flowchart TD
         modUser["Moderar cuenta<br/>/moderation/users/{username}"]
     end
 
+    subgraph administracion["Administración"]
+        genres["Géneros<br/>/admin/genres"]
+        editGenre["Editar género<br/>/admin/genres/{id}/edit"]
+        languages["Idiomas<br/>/admin/languages"]
+        editLanguage["Editar idioma<br/>/admin/languages/{code}/edit"]
+    end
+
     subgraph legal["Legal"]
         terms["Términos de uso<br/>/terms"]
         privacy["Privacidad<br/>/privacy"]
@@ -101,16 +109,26 @@ flowchart TD
     author --> modUser
     story --> modStory
     chapter --> modStory
+    queue --> genres
+    queue --> languages
+    modLog --> genres
+    modLog --> languages
+    genres --> editGenre
+    genres <--> languages
+    genres --> explore
+    languages --> editLanguage
 
     classDef publico fill:#d9f2e3,stroke:#3c8c5a,color:#1b3d27
     classDef sesion fill:#dbe8fb,stroke:#3d6fb6,color:#1a2f52
     classDef autor fill:#fbe3d6,stroke:#c8643b,color:#4d2412
     classDef moderacion fill:#f3dcef,stroke:#9b4f8f,color:#3f1d3a
+    classDef admin fill:#ece4f7,stroke:#6c4fa3,color:#2a1d45
 
     class home,register,login,explore,story,chapter,tag,author,terms,privacy publico
     class settings,myStories,newStory,report,reportSent,commentEdit,commentDelete sesion
     class editStory,deleteStory,newChapter,editChapter,deleteChapter autor
     class queue,modLog,modStory,modUser moderacion
+    class genres,editGenre,languages,editLanguage admin
 ```
 
 Notas:
@@ -123,6 +141,8 @@ Notas:
 - `/stories/{id}` (sin slug) y `/comments/{id}` no son páginas: redirigen a la historia y al comentario
   dentro de su capítulo.
 - Crear cuenta e Iniciar sesión enlazan entre sí, y Crear cuenta enlaza a Términos y Privacidad.
+- Los enlaces a Géneros e Idiomas están en la barra de todas las páginas de moderación, pero solo los ven los
+  administradores.
 
 ## Enlaces entre contenidos
 

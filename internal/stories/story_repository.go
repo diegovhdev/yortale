@@ -19,7 +19,7 @@ func NewStoryRepository(db *pgxpool.Pool) *StoryRepository {
 	return &StoryRepository{db: db}
 }
 
-// storyColumns espera las tablas con los alias de storyJoins: s (historia), u (autor).
+// storyColumns espera las tablas con los alias de storyJoins: s (historia), u (autor), l (idioma).
 // Los géneros y los tags llegan como arrays JSON ordenados por posición; encoding/json no
 // distingue mayúsculas en los nombres de campo, así que "id" llena Genre.ID.
 const storyColumns = `s.id, s.author_id, u.username::text, coalesce(nullif(u.display_name, ''), u.username::text),
@@ -27,19 +27,20 @@ const storyColumns = `s.id, s.author_id, u.username::text, coalesce(nullif(u.dis
 		FROM story_genres sg JOIN genres g ON g.id = sg.genre_id WHERE sg.story_id = s.id),
 	(SELECT coalesce(json_agg(json_build_object('name', t.name, 'slug', t.slug) ORDER BY st.position), '[]')
 		FROM story_tags st JOIN tags t ON t.id = st.tag_id WHERE st.story_id = s.id),
-	s.kind, s.title, s.slug, coalesce(s.synopsis, ''), s.language, s.content_rating, s.warnings, s.status,
+	s.kind, s.title, s.slug, coalesce(s.synopsis, ''), s.language, l.name, s.content_rating, s.warnings, s.status,
 	s.published_at, s.last_chapter_at, s.reads_count,
 	(SELECT count(*) FROM chapters c WHERE c.story_id = s.id AND c.is_published),
 	s.hidden_at, coalesce(s.hidden_reason, ''), s.created_at, s.updated_at`
 
-// storyJoins une la historia (alias s) con su autor.
+// storyJoins une la historia (alias s) con su autor y su idioma (la FK asegura que existe).
 const storyJoins = `
-		JOIN users u ON u.id = s.author_id`
+		JOIN users u ON u.id = s.author_id
+		JOIN languages l ON l.code = s.language`
 
 func scanStory(row pgx.Row) (Story, error) {
 	var s Story
 	err := row.Scan(&s.ID, &s.AuthorID, &s.AuthorUsername, &s.AuthorName,
-		&s.Genres, &s.Tags, &s.Kind, &s.Title, &s.Slug, &s.Synopsis, &s.Language, &s.ContentRating, &s.Warnings, &s.Status,
+		&s.Genres, &s.Tags, &s.Kind, &s.Title, &s.Slug, &s.Synopsis, &s.Language, &s.LanguageName, &s.ContentRating, &s.Warnings, &s.Status,
 		&s.PublishedAt, &s.LastChapterAt, &s.ReadsCount, &s.ChapterCount,
 		&s.HiddenAt, &s.HiddenReason, &s.CreatedAt, &s.UpdatedAt)
 	return s, err
@@ -319,8 +320,9 @@ func (r *StoryRepository) Delete(ctx context.Context, id, authorID int64) error 
 	return nil
 }
 
+// ListGenres devuelve todos los géneros, activos o no, por nombre.
 func (r *StoryRepository) ListGenres(ctx context.Context) ([]Genre, error) {
-	rows, err := r.db.Query(ctx, `SELECT id, name, slug FROM genres ORDER BY name`)
+	rows, err := r.db.Query(ctx, `SELECT id, name, slug, active FROM genres ORDER BY name`)
 	if err != nil {
 		return nil, fmt.Errorf("listar géneros: %w", err)
 	}
@@ -329,6 +331,40 @@ func (r *StoryRepository) ListGenres(ctx context.Context) ([]Genre, error) {
 		return nil, fmt.Errorf("listar géneros: %w", err)
 	}
 	return genres, nil
+}
+
+// Nombres que PostgreSQL da a los UNIQUE de genres; los dos se traducen a ErrGenreNameTaken.
+const (
+	genreNameConstraint = "genres_name_key"
+	genreSlugConstraint = "genres_slug_key"
+)
+
+func (r *StoryRepository) CreateGenre(ctx context.Context, g Genre) error {
+	_, err := r.db.Exec(ctx, `INSERT INTO genres (name, slug, active) VALUES ($1, $2, $3)`, g.Name, g.Slug, g.Active)
+	return genreError(err, "crear género")
+}
+
+// UpdateGenre cambia el nombre (y con él el slug) y el estado del género.
+func (r *StoryRepository) UpdateGenre(ctx context.Context, g Genre) error {
+	tag, err := r.db.Exec(ctx, `UPDATE genres SET name = $2, slug = $3, active = $4 WHERE id = $1`,
+		g.ID, g.Name, g.Slug, g.Active)
+	if err != nil {
+		return genreError(err, "actualizar género")
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func genreError(err error, msg string) error {
+	switch constraint := database.UniqueViolation(err); {
+	case err == nil:
+		return nil
+	case constraint == genreNameConstraint || constraint == genreSlugConstraint:
+		return ErrGenreNameTaken
+	}
+	return fmt.Errorf("%s: %w", msg, err)
 }
 
 // GetTag busca un tag por su slug y cuenta sus historias publicadas (y no ocultas).

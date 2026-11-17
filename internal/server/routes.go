@@ -106,6 +106,17 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("POST /moderation/users/{username}/unsuspend", staff(modHandler.Unsuspend))
 	mux.Handle("POST /moderation/users/{username}/role", admin(modHandler.SetRole))
 
+	// Administración. Los géneros y los idiomas son de stories: al cambiarlos, su caché se
+	// vacía al momento.
+	mux.Handle("GET /admin/genres", admin(storyHandler.AdminGenres))
+	mux.Handle("POST /admin/genres", admin(storyHandler.CreateGenre))
+	mux.Handle("GET /admin/genres/{id}/edit", admin(storyHandler.EditGenre))
+	mux.Handle("POST /admin/genres/{id}/edit", admin(storyHandler.UpdateGenre))
+	mux.Handle("GET /admin/languages", admin(storyHandler.Languages))
+	mux.Handle("POST /admin/languages", admin(storyHandler.CreateLanguage))
+	mux.Handle("GET /admin/languages/{code}/edit", admin(storyHandler.EditLanguage))
+	mux.Handle("POST /admin/languages/{code}/edit", admin(storyHandler.UpdateLanguage))
+
 	mux.HandleFunc("GET /terms", legal.Terms)
 	mux.HandleFunc("GET /privacy", legal.Privacy)
 

@@ -6,6 +6,8 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+
+	"github.com/diegovhdev/yortale/web/components"
 )
 
 // StoryForm guarda lo que el autor escribió y los errores, para volver a mostrar el formulario.
@@ -24,24 +26,34 @@ type StoryForm struct {
 	Tags          []string // tal como llegan: un valor por tag con JS, un texto con comas sin JS
 	Status        string
 	Genres        []Genre
+	Languages     []Language
+	keepLanguage  string            // el idioma guardado de la historia; se ofrece aunque esté inactivo
 	Errors        map[string]string // error por campo, por ejemplo Errors["title"]
 	General       string            // error que no pertenece a un campo concreto
 }
 
-func newStoryForm(genres []Genre) StoryForm {
+// storyChoices son las listas completas de la base de datos (con los géneros e idiomas
+// inactivos); el formulario deja elegir solo los activos y los que la historia ya tiene.
+type storyChoices struct {
+	Genres    []Genre
+	Languages []Language
+}
+
+func newStoryForm(c storyChoices) StoryForm {
 	return StoryForm{
 		Action:        "/stories",
 		IsNew:         true,
 		CancelURL:     "/my/stories",
 		Kind:          KindOriginal,
-		Language:      "es",
+		Language:      defaultLanguage,
 		ContentRating: "general",
 		Status:        StatusDraft,
-		Genres:        genres,
+		Genres:        selectableGenres(c.Genres, nil),
+		Languages:     c.Languages,
 	}
 }
 
-func editStoryForm(s Story, genres []Genre) StoryForm {
+func editStoryForm(s Story, c storyChoices) StoryForm {
 	f := StoryForm{
 		Action:        s.EditURL(),
 		CancelURL:     s.URL(),
@@ -52,7 +64,9 @@ func editStoryForm(s Story, genres []Genre) StoryForm {
 		ContentRating: s.ContentRating,
 		Warnings:      s.Warnings,
 		Status:        s.Status,
-		Genres:        genres,
+		Genres:        selectableGenres(c.Genres, genreIDs(s.Genres)),
+		Languages:     c.Languages,
+		keepLanguage:  s.Language,
 	}
 	for _, g := range s.Genres {
 		f.GenreIDs = append(f.GenreIDs, strconv.Itoa(int(g.ID)))
@@ -75,6 +89,11 @@ func (f StoryForm) Input() StoryInput {
 		Tags:          f.Tags,
 		Status:        f.Status,
 	}
+}
+
+// LanguageOptions son los idiomas del <select>: los activos y el que la historia ya tenía.
+func (f StoryForm) LanguageOptions() []components.Option {
+	return languageOptions(f.Languages, f.keepLanguage)
 }
 
 // genresField es el name de las casillas de género y la clave de sus errores.
@@ -217,4 +236,54 @@ func confirmDeleteChapter(s Story, c Chapter) ConfirmDelete {
 		Action:    c.DeleteURL(),
 		CancelURL: s.URL(),
 	}
+}
+
+// LanguageForm es el formulario de idioma de /admin/languages, para agregar uno (IsNew) o
+// editarlo. Al editar no se muestra el código, que no cambia.
+type LanguageForm struct {
+	Action  string
+	IsNew   bool
+	Code    string
+	Name    string
+	Active  bool
+	Errors  map[string]string
+	General string
+}
+
+const languagesURL = "/admin/languages"
+
+func newLanguageForm() LanguageForm {
+	return LanguageForm{Action: languagesURL, IsNew: true, Active: true}
+}
+
+func editLanguageForm(l Language) LanguageForm {
+	return LanguageForm{Action: l.EditURL(), Code: l.Code, Name: l.Name, Active: l.Active}
+}
+
+func (f LanguageForm) Input() LanguageInput {
+	return LanguageInput{Code: f.Code, Name: f.Name, Active: f.Active}
+}
+
+// GenreForm es el formulario de género de /admin/genres, para agregar uno (IsNew) o editarlo.
+type GenreForm struct {
+	Action  string
+	IsNew   bool
+	Name    string
+	Active  bool
+	Errors  map[string]string
+	General string
+}
+
+const genresURL = "/admin/genres"
+
+func newGenreForm() GenreForm {
+	return GenreForm{Action: genresURL, IsNew: true, Active: true}
+}
+
+func editGenreForm(g Genre) GenreForm {
+	return GenreForm{Action: g.EditURL(), Name: g.Name, Active: g.Active}
+}
+
+func (f GenreForm) Input() GenreInput {
+	return GenreInput{Name: f.Name, Active: f.Active}
 }

@@ -67,10 +67,16 @@ CREATE INDEX follows_followed_idx ON follows (followed_id);
 -- ---------------------------------------------------------------------
 -- CLASIFICACIÓN: GÉNEROS Y ETIQUETAS
 -- ---------------------------------------------------------------------
+-- Géneros: una lista corta y cerrada que gestiona un administrador en /admin/genres. slug es
+-- TagSlug(name), recalculado al renombrar, y su UNIQUE impide nombres que solo cambian en
+-- tildes o mayúsculas; las URL usan el id. maxGenreNameRunes en Go coincide con el CHECK.
+-- No se borran (story_genres caería en cascada): uno inactivo no se ofrece para elegirlo,
+-- pero las historias que ya lo tienen lo conservan.
 CREATE TABLE genres (
-    id     smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name   text NOT NULL UNIQUE,                     -- Fantasía, Romance, Terror...
-    slug   text NOT NULL UNIQUE
+    id      smallint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name    text NOT NULL UNIQUE CHECK (char_length(name) BETWEEN 1 AND 50),  -- Fantasía, Romance...
+    slug    text NOT NULL UNIQUE,
+    active  boolean NOT NULL DEFAULT true
 );
 
 -- Etiquetas creadas por los autores. La identidad es slug (TagSlug en Go: sin mayúsculas,
@@ -82,6 +88,17 @@ CREATE TABLE tags (
     slug   text NOT NULL UNIQUE
 );
 CREATE INDEX tags_slug_trgm ON tags USING gin (slug gin_trgm_ops);  -- sugerencias al escribir
+
+-- Idiomas de las historias. Los agrega y edita un administrador en /admin/languages.
+-- code es un BCP 47 simplificado (ISO 639 y región opcional: es, ast, pt-BR) que no cambia
+-- nunca; languageCodePattern y maxLanguageNameRunes en Go deben coincidir con los CHECK.
+-- name es el endónimo (Español, English), que se escribe igual en cualquier interfaz.
+-- Desactivar un idioma lo quita del formulario, pero las historias que ya lo usan lo conservan.
+CREATE TABLE languages (
+    code    text PRIMARY KEY CHECK (code ~ '^[a-z]{2,3}(-[A-Z]{2})?$'),
+    name    text NOT NULL UNIQUE CHECK (char_length(name) BETWEEN 1 AND 50),
+    active  boolean NOT NULL DEFAULT true
+);
 
 
 -- ---------------------------------------------------------------------
@@ -96,7 +113,7 @@ CREATE TABLE stories (
     cover_url        text,
     kind             text NOT NULL DEFAULT 'original'
                      CHECK (kind IN ('original', 'fanfic')),  -- no es un género: un fanfic también los tiene
-    language         text NOT NULL DEFAULT 'es',
+    language         text NOT NULL DEFAULT 'es' REFERENCES languages(code),
     content_rating   text NOT NULL DEFAULT 'general'
                      CHECK (content_rating IN ('general', 'teen', 'mature')),
     -- Advertencias de contenido, de una lista cerrada (ContentWarnings en Go debe coincidir).
@@ -307,3 +324,8 @@ INSERT INTO genres (name, slug) VALUES
     ('Fantasía', 'fantasia'), ('Romance', 'romance'), ('Ciencia ficción', 'ciencia-ficcion'),
     ('Terror', 'terror'), ('Misterio', 'misterio'), ('Aventura', 'aventura'),
     ('Drama', 'drama'), ('Humor', 'humor'), ('Poesía', 'poesia');
+
+-- stories.language tiene DEFAULT 'es', así que 'es' debe existir.
+INSERT INTO languages (code, name) VALUES
+    ('es', 'Español'), ('en', 'English'), ('pt', 'Português'),
+    ('fr', 'Français'), ('it', 'Italiano'), ('de', 'Deutsch');

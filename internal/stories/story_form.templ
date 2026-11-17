@@ -75,7 +75,7 @@ templ StoryFormFragment(f StoryForm) {
 			Name:     "language",
 			Value:    f.Language,
 			Error:    f.Errors["language"],
-			Options:  Languages,
+			Options:  f.LanguageOptions(),
 			Required: true,
 		})
 		@components.Select(components.SelectProps{

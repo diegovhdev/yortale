@@ -108,11 +108,14 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 	filter.Tags = tagFilterSlugs(view.Tags)
 	filter.ExcludeTags = tagFilterSlugs(view.ExcludeTags)
 
-	var err error
-	if view.Genres, err = h.stories.Genres(r.Context()); err != nil {
+	genres, err := h.stories.Genres(r.Context())
+	if err != nil {
 		fail(w, err, "listar géneros")
 		return
 	}
+	// Un género inactivo sigue filtrando (los enlaces de las historias que lo tienen llevan aquí),
+	// así que se muestra mientras esté marcado.
+	view.Genres = selectableGenres(genres, filter.GenreIDs)
 	if view.Stories, view.HasNext, err = h.stories.Explore(r.Context(), filter); err != nil {
 		fail(w, err, "explorar historias")
 		return
@@ -241,14 +244,27 @@ func storyFormValues(r *http.Request, f *StoryForm) {
 	f.Status = r.PostFormValue("status")
 }
 
-// GET /stories/new
-func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
+// storyChoices carga los géneros y los idiomas del formulario de historia.
+func (h *Handler) storyChoices(r *http.Request) (storyChoices, error) {
 	genres, err := h.stories.Genres(r.Context())
 	if err != nil {
-		fail(w, err, "listar géneros")
+		return storyChoices{}, err
+	}
+	langs, err := h.stories.Languages(r.Context())
+	if err != nil {
+		return storyChoices{}, err
+	}
+	return storyChoices{Genres: genres, Languages: langs}, nil
+}
+
+// GET /stories/new
+func (h *Handler) New(w http.ResponseWriter, r *http.Request) {
+	choices, err := h.storyChoices(r)
+	if err != nil {
+		fail(w, err, "listar géneros e idiomas")
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, NewStoryPage(newStoryForm(genres)))
+	httpx.Render(w, r, http.StatusOK, NewStoryPage(newStoryForm(choices)))
 }
 
 // POST /stories
@@ -258,12 +274,12 @@ func (h *Handler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user := auth.CurrentUser(r.Context())
-	genres, err := h.stories.Genres(r.Context())
+	choices, err := h.storyChoices(r)
 	if err != nil {
-		fail(w, err, "listar géneros")
+		fail(w, err, "listar géneros e idiomas")
 		return
 	}
-	form := newStoryForm(genres)
+	form := newStoryForm(choices)
 	storyFormValues(r, &form)
 
 	story, err := h.stories.Create(r.Context(), user.ID, form.Input())
@@ -287,12 +303,12 @@ func (h *Handler) Edit(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, "buscar historia")
 		return
 	}
-	genres, err := h.stories.Genres(r.Context())
+	choices, err := h.storyChoices(r)
 	if err != nil {
-		fail(w, err, "listar géneros")
+		fail(w, err, "listar géneros e idiomas")
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, EditStoryPage(editStoryForm(story, genres)))
+	httpx.Render(w, r, http.StatusOK, EditStoryPage(editStoryForm(story, choices)))
 }
 
 // POST /stories/{id}/edit
@@ -312,12 +328,12 @@ func (h *Handler) Update(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, "buscar historia")
 		return
 	}
-	genres, err := h.stories.Genres(r.Context())
+	choices, err := h.storyChoices(r)
 	if err != nil {
-		fail(w, err, "listar géneros")
+		fail(w, err, "listar géneros e idiomas")
 		return
 	}
-	form := editStoryForm(story, genres)
+	form := editStoryForm(story, choices)
 	storyFormValues(r, &form)
 
 	story, err = h.stories.Update(r.Context(), user.ID, id, form.Input())

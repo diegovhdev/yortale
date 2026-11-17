@@ -66,7 +66,7 @@ func TestExploreViewPageURL(t *testing.T) {
 }
 
 func TestValidateSynopsisMinWords(t *testing.T) {
-	svc := &Service{}
+	svc := &Service{languages: &fakeLanguages{}}
 	short := strings.Repeat("palabra ", minSynopsisWords-1)
 	enough := strings.Repeat("palabra ", minSynopsisWords)
 	tests := []struct {
@@ -82,7 +82,7 @@ func TestValidateSynopsisMinWords(t *testing.T) {
 		{"publicada justo el mínimo", "completed", enough, false},
 	}
 	for _, tt := range tests {
-		_, err := svc.validateStory(t.Context(), StoryInput{Status: tt.status, Synopsis: tt.synopsis})
+		_, err := svc.validateStory(t.Context(), StoryInput{Status: tt.status, Synopsis: tt.synopsis}, Story{})
 		verrs, _ := err.(auth.ValidationErrors)
 		if got := verrs["synopsis"] != ""; got != tt.wantErr {
 			t.Errorf("%s: error de sinopsis = %q, se esperaba error: %v", tt.name, verrs["synopsis"], tt.wantErr)

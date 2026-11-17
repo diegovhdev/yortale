@@ -50,7 +50,7 @@ func run() error {
 	users := auth.NewUserRepository(pool)
 	sessions := auth.NewSessionRepository(pool)
 	authService := auth.NewService(users, sessions)
-	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), authService)
+	storyService := stories.NewService(stories.NewStoryRepository(pool), stories.NewChapterRepository(pool), stories.NewLanguageRepository(pool), authService)
 	commentService := comments.NewService(comments.NewRepository(pool), storyService)
 	modService := moderation.NewService(moderation.NewRepository(pool), storyService, authService)
 
