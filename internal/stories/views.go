@@ -21,20 +21,29 @@ type StoryView struct {
 // los enlaces ya construidos para no repetir en JS cómo se forman las URL.
 func (v StoryView) ChaptersJSON() string {
 	type item struct {
-		ID        int64  `json:"id"`
-		Title     string `json:"title"`
-		Draft     bool   `json:"draft"`
-		URL       string `json:"url"`
-		EditURL   string `json:"editURL"`
-		DeleteURL string `json:"deleteURL"`
-		MoveURL   string `json:"moveURL"`
+		ID         int64  `json:"id"`
+		Title      string `json:"title"`
+		Draft      bool   `json:"draft"`
+		URL        string `json:"url"`
+		EditURL    string `json:"editURL"`
+		DeleteURL  string `json:"deleteURL"`
+		MoveURL    string `json:"moveURL"`
+		PublishURL string `json:"publishURL"`
 	}
 	items := make([]item, 0, len(v.Chapters))
 	for _, c := range v.Chapters {
 		items = append(items, item{ID: c.ID, Title: c.Title, Draft: !c.IsPublished, URL: c.URL(v.Story),
-			EditURL: c.EditURL(), DeleteURL: c.DeleteURL(), MoveURL: c.MoveURL()})
+			EditURL: c.EditURL(), DeleteURL: c.DeleteURL(), MoveURL: c.MoveURL(), PublishURL: c.PublishURL()})
 	}
 	return mustJSON(items)
+}
+
+// canMoveChapter dice si el capítulo i puede moverse una posición (delta = -1 sube, 1 baja):
+// hace falta un vecino y que sea del mismo estado, porque los publicados van siempre antes
+// que los borradores (ver ChapterRepository.Move). canMove en chapter-order.js es la misma regla.
+func canMoveChapter(chapters []Chapter, i, delta int) bool {
+	j := i + delta
+	return j >= 0 && j < len(chapters) && chapters[j].IsPublished == chapters[i].IsPublished
 }
 
 // CanReport dice si se muestra el enlace para reportar: no a su autor, y no si ya está oculta.

@@ -503,6 +503,18 @@ form[action$="/delete"] button:hover {
   font-size: 0.8rem;
 }
 
+/* Publicar un borrador desde el índice: la acción principal de esa fila. */
+.chapter-list .actions button.publish {
+  background: var(--color-brand-primary);
+  border-color: var(--color-brand-primary);
+  color: var(--color-brand-on-primary);
+  font-weight: 650;
+}
+
+.chapter-list .actions button.publish:hover {
+  background: var(--color-brand-primary-hover);
+}
+
 /* Solo para lectores de pantalla: fuera de la vista pero no oculto (p. ej. avisos aria-live). */
 .sr-only {
   position: absolute;

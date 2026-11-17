@@ -89,7 +89,7 @@ templ staticChapterList(v StoryView, attrs templ.Attributes) {
 					<small>(borrador)</small>
 				}
 				if v.IsAuthor {
-					@chapterActions(c, i == 0, i == len(v.Chapters)-1)
+					@chapterActions(c, canMoveChapter(v.Chapters, i, -1), canMoveChapter(v.Chapters, i, 1))
 				}
 			</li>
 		}
@@ -113,11 +113,16 @@ templ authorChapterList(v StoryView) {
 						<a :href="c.url" x-text="c.title"></a>
 						<small x-show="c.draft">(borrador)</small>
 						<span class="actions">
+							<template x-if="c.draft">
+								<form method="post" :action="c.publishURL">
+									<button type="submit" class="publish" :aria-label="'Publicar ' + c.title">Publicar</button>
+								</form>
+							</template>
 							<a :href="c.editURL">Editar</a>
 							<a :href="c.deleteURL">Borrar</a>
 							<button
 								type="button"
-								x-show="i > 0"
+								x-show="canMove(i, -1)"
 								:data-move="c.id + '-up'"
 								:aria-label="'Subir ' + c.title"
 								title="Subir"
@@ -125,7 +130,7 @@ templ authorChapterList(v StoryView) {
 							>↑</button>
 							<button
 								type="button"
-								x-show="i < chapters.length - 1"
+								x-show="canMove(i, 1)"
 								:data-move="c.id + '-down'"
 								:aria-label="'Bajar ' + c.title"
 								title="Bajar"
@@ -139,19 +144,24 @@ templ authorChapterList(v StoryView) {
 	</div>
 }
 
-// chapterActions son los controles del autor en el índice. Mover usa formularios POST
-// normales: cambian datos, así que no pueden ser enlaces GET.
-templ chapterActions(c Chapter, first, last bool) {
+// chapterActions son los controles del autor en el índice. Publicar (solo en borradores) y
+// mover usan formularios POST normales: cambian datos, así que no pueden ser enlaces GET.
+templ chapterActions(c Chapter, canUp, canDown bool) {
 	<span class="actions">
+		if !c.IsPublished {
+			<form method="post" action={ templ.URL(c.PublishURL()) }>
+				<button type="submit" class="publish" aria-label={ "Publicar " + c.Title }>Publicar</button>
+			</form>
+		}
 		<a href={ templ.URL(c.EditURL()) }>Editar</a>
 		<a href={ templ.URL(c.DeleteURL()) }>Borrar</a>
-		if !first {
+		if canUp {
 			<form method="post" action={ templ.URL(c.MoveURL()) }>
 				<input type="hidden" name="direction" value="up"/>
 				<button type="submit" aria-label={ "Subir " + c.Title } title="Subir">↑</button>
 			</form>
 		}
-		if !last {
+		if canDown {
 			<form method="post" action={ templ.URL(c.MoveURL()) }>
 				<input type="hidden" name="direction" value="down"/>
 				<button type="submit" aria-label={ "Bajar " + c.Title } title="Bajar">↓</button>

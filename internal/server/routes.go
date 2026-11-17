@@ -77,6 +77,7 @@ func NewRouter(d Deps) http.Handler {
 	mux.Handle("GET /chapters/{id}/delete", member(storyHandler.ConfirmDeleteChapter))
 	mux.Handle("POST /chapters/{id}/delete", member(storyHandler.DeleteChapter))
 	mux.Handle("POST /chapters/{id}/move", member(storyHandler.MoveChapter))
+	mux.Handle("POST /chapters/{id}/publish", member(storyHandler.PublishChapter))
 
 	// Comentarios de los capítulos. Se muestran en la página de lectura (stories llama a
 	// commentHandler.ChapterSection); estas rutas son para escribirlos, editarlos y borrarlos.

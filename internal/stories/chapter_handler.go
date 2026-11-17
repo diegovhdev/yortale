@@ -161,6 +161,37 @@ func (h *Handler) renderChapterFormError(w http.ResponseWriter, r *http.Request,
 	httpx.Render(w, r, status, ChapterFormPage(form))
 }
 
+// POST /chapters/{id}/publish
+//
+// Es un formulario normal (sin htmx) en el índice del autor. Si sale bien, vuelve a la
+// historia. Si no se puede publicar, lleva al formulario del capítulo, que explica qué falta:
+// con los errores de validación (pocas palabras) o con el aviso de savedAsDraftParam (la
+// historia aún no puede publicarse).
+func (h *Handler) PublishChapter(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(r, "id")
+	if !ok {
+		notFound(w)
+		return
+	}
+	story, c, err := h.stories.PublishChapter(r.Context(), auth.CurrentUser(r.Context()).ID, id)
+	var verrs auth.ValidationErrors
+	if errors.As(err, &verrs) {
+		form := editChapterForm(story, c)
+		form.Publish = true
+		h.renderChapterFormError(w, r, err, form, "publicar capítulo")
+		return
+	}
+	if err != nil {
+		fail(w, err, "publicar capítulo")
+		return
+	}
+	if !c.IsPublished {
+		httpx.Redirect(w, r, c.EditURL()+"?"+savedAsDraftParam)
+		return
+	}
+	httpx.Redirect(w, r, story.URL())
+}
+
 // GET /chapters/{id}/delete
 func (h *Handler) ConfirmDeleteChapter(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(r, "id")
@@ -208,6 +239,11 @@ func (h *Handler) MoveChapter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	story, err := h.stories.MoveChapter(r.Context(), auth.CurrentUser(r.Context()).ID, id, direction == "up")
+	if errors.Is(err, ErrMixedMove) {
+		// Sin JS la flecha no se muestra, así que esto solo llega desde una página desfasada.
+		http.Error(w, "Los capítulos publicados van siempre antes que los borradores.", http.StatusConflict)
+		return
+	}
 	if err != nil {
 		fail(w, err, "mover capítulo")
 		return

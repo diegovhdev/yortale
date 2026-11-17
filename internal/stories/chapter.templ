@@ -104,9 +104,21 @@ templ ChapterFormFragment(f ChapterForm) {
 		</div>
 		<div class="field">
 			<label>
-				<input type="checkbox" name="publish" checked?={ f.Publish }/>
+				<input
+					type="checkbox"
+					name="publish"
+					checked?={ f.Publish }
+					if f.Errors["publish"] != "" {
+						aria-invalid="true"
+						aria-describedby="publish-error"
+					}
+				/>
 				Publicado (visible para los lectores)
 			</label>
+			<small>Al publicarlo pasa a ir justo detrás del último capítulo publicado.</small>
+			if f.Errors["publish"] != "" {
+				<small id="publish-error" class="error">{ f.Errors["publish"] }</small>
+			}
 		</div>
 		<button type="submit">
 			if f.IsNew {

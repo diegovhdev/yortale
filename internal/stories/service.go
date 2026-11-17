@@ -570,6 +570,7 @@ func validateChapter(in ChapterInput) (ChapterParams, error) {
 
 // CreateChapter y UpdateChapter guardan el capítulo. Si in.Publish pero la historia aún no
 // puede publicarse (publishBlocker), lo guardan como borrador en lugar de dar error.
+// Publicar coloca el capítulo justo detrás del último publicado (ver ChapterRepository).
 func (s *Service) CreateChapter(ctx context.Context, authorID, storyID int64, in ChapterInput) (Story, Chapter, error) {
 	story, err := s.ForAuthor(ctx, authorID, storyID)
 	if err != nil {
@@ -624,6 +625,30 @@ func (s *Service) UpdateChapter(ctx context.Context, authorID, chapterID int64, 
 		return story, c, err
 	}
 	downgradeIfBlocked(story, &p)
+	updated, err := s.chapters.Update(ctx, chapterID, p)
+	if errors.Is(err, ErrNotLastPublished) {
+		return story, c, auth.ValidationErrors{"publish": "Solo el último capítulo publicado puede volver a " +
+			"borrador, para no dejar huecos en lo que ya leen los lectores."}
+	}
+	return story, updated, err
+}
+
+// PublishChapter publica un borrador tal como está guardado, desde el índice de capítulos.
+// Aplica las mismas reglas que el formulario: si el texto no llega al mínimo devuelve los
+// errores de validación, y si la historia aún no puede publicarse (publishBlocker) deja el
+// capítulo como estaba, sin error; el handler lo detecta porque sigue sin publicar.
+func (s *Service) PublishChapter(ctx context.Context, authorID, chapterID int64) (Story, Chapter, error) {
+	story, c, err := s.ChapterForAuthor(ctx, authorID, chapterID)
+	if err != nil {
+		return Story{}, Chapter{}, err
+	}
+	if c.IsPublished || publishBlocker(story) != "" {
+		return story, c, nil
+	}
+	p, err := validateChapter(ChapterInput{Title: c.Title, Content: c.Content, Publish: true})
+	if err != nil {
+		return story, c, err
+	}
 	c, err = s.chapters.Update(ctx, chapterID, p)
 	return story, c, err
 }
@@ -636,7 +661,8 @@ func (s *Service) DeleteChapter(ctx context.Context, authorID, chapterID int64) 
 	return story, s.chapters.Delete(ctx, chapterID)
 }
 
-// MoveChapter sube (up = true) o baja el capítulo una posición.
+// MoveChapter sube (up = true) o baja el capítulo una posición, sin cruzar publicados con
+// borradores (ErrMixedMove).
 func (s *Service) MoveChapter(ctx context.Context, authorID, chapterID int64, up bool) (Story, error) {
 	story, _, err := s.ChapterForAuthor(ctx, authorID, chapterID)
 	if err != nil {

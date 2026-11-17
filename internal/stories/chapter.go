@@ -25,9 +25,10 @@ func (c Chapter) URL(s Story) string {
 	return fmt.Sprintf("%s/chapters/%d", s.URL(), c.ID)
 }
 
-func (c Chapter) EditURL() string   { return fmt.Sprintf("/chapters/%d/edit", c.ID) }
-func (c Chapter) DeleteURL() string { return fmt.Sprintf("/chapters/%d/delete", c.ID) }
-func (c Chapter) MoveURL() string   { return fmt.Sprintf("/chapters/%d/move", c.ID) }
+func (c Chapter) EditURL() string    { return fmt.Sprintf("/chapters/%d/edit", c.ID) }
+func (c Chapter) DeleteURL() string  { return fmt.Sprintf("/chapters/%d/delete", c.ID) }
+func (c Chapter) MoveURL() string    { return fmt.Sprintf("/chapters/%d/move", c.ID) }
+func (c Chapter) PublishURL() string { return fmt.Sprintf("/chapters/%d/publish", c.ID) }
 
 // ReportURL lleva al formulario para reportar el capítulo (paquete moderation).
 func (c Chapter) ReportURL() string {

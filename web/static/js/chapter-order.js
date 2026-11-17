@@ -30,11 +30,20 @@ document.addEventListener("alpine:init", () => {
         this.confirmed = [...this.chapters];
       },
 
+      // canMove dice si el capítulo index puede moverse una posición: los publicados van
+      // siempre antes que los borradores, así que no se cruzan. Es la misma regla que
+      // canMoveChapter en internal/stories/views.go.
+      canMove(index, delta) {
+        const target = index + delta;
+        return target >= 0 && target < this.chapters.length &&
+          this.chapters[target].draft === this.chapters[index].draft;
+      },
+
       // move mueve el capítulo de la posición index una hacia arriba (delta = -1) o hacia
       // abajo (delta = 1).
       move(index, delta) {
+        if (!this.canMove(index, delta)) return;
         const target = index + delta;
-        if (target < 0 || target >= this.chapters.length) return;
         const chapter = this.chapters[index];
         const direction = delta < 0 ? "up" : "down";
 
@@ -61,6 +70,8 @@ document.addEventListener("alpine:init", () => {
           });
           if (res.type === "opaqueredirect") {
             problem = "Tu sesión ha caducado. Vuelve a iniciar sesión para ordenar los capítulos.";
+          } else if (res.status === 409) {
+            problem = `No se pudo mover «${chapter.title}»: los capítulos publicados van antes que los borradores.`;
           } else if (!res.ok) {
             problem = `No se pudo mover «${chapter.title}».`;
           }
@@ -84,7 +95,7 @@ document.addEventListener("alpine:init", () => {
       },
 
       // focusMoved devuelve el foco a la flecha pulsada, que ahora está en otra fila. Si el
-      // capítulo llegó al principio o al final, esa flecha ya no se ve y se usa la otra.
+      // capítulo llegó al principio o al final de su grupo, esa flecha ya no se ve y se usa la otra.
       focusMoved(id, direction) {
         const other = direction === "up" ? "down" : "up";
         for (const dir of [direction, other]) {

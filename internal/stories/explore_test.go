@@ -112,3 +112,23 @@ func TestDowngradeIfBlocked(t *testing.T) {
 		}
 	}
 }
+
+func TestCanMoveChapter(t *testing.T) {
+	chapters := []Chapter{{IsPublished: true}, {IsPublished: true}, {}, {}}
+	tests := []struct {
+		i, delta int
+		want     bool
+	}{
+		{0, -1, false}, // el primero no sube
+		{0, 1, true},
+		{1, 1, false},  // último publicado: no baja entre los borradores
+		{2, -1, false}, // primer borrador: no sube entre los publicados
+		{2, 1, true},
+		{3, 1, false}, // el último no baja
+	}
+	for _, tt := range tests {
+		if got := canMoveChapter(chapters, tt.i, tt.delta); got != tt.want {
+			t.Errorf("canMoveChapter(%d, %d) = %v, se esperaba %v", tt.i, tt.delta, got, tt.want)
+		}
+	}
+}

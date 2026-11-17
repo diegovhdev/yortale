@@ -106,12 +106,13 @@ func TestStoriesIntegration(t *testing.T) {
 		t.Fatalf("explorar mostró borradores: %v %v", stories, err)
 	}
 
-	// Capítulos: uno en borrador y otro publicado. Publicar saca la historia del borrador.
+	// Capítulos: uno en borrador y otro publicado, que pasa por delante del borrador.
+	// Publicar saca la historia del borrador.
 	_, draft, err := svc.CreateChapter(ctx, author.ID, story.ID, ChapterInput{Title: "Uno", Content: "Hola  mundo\n\nadiós"})
 	must(err)
 	_, published, err := svc.CreateChapter(ctx, author.ID, story.ID, ChapterInput{Title: "Dos", Content: longText, Publish: true})
 	must(err)
-	if draft.Position != 1 || published.Position != 2 || draft.WordCount != 3 || published.PublishedAt == nil {
+	if draft.Position != 1 || published.Position != 1 || draft.WordCount != 3 || published.PublishedAt == nil {
 		t.Fatalf("capítulos inesperados: %+v / %+v", draft, published)
 	}
 	story, err = svc.Visible(ctx, reader, story.ID)
@@ -287,9 +288,10 @@ func TestStoriesIntegration(t *testing.T) {
 		t.Fatalf("reads_count = %d, se esperaba 1", story.ReadsCount)
 	}
 
-	// Reordenar (restricción DEFERRABLE) y vecinos.
-	_, err = svc.MoveChapter(ctx, author.ID, published.ID, true)
-	must(err)
+	// Reordenar: no se cruzan publicados con borradores, y el primero no sube.
+	if _, err = svc.MoveChapter(ctx, author.ID, published.ID, false); !errors.Is(err, ErrMixedMove) {
+		t.Fatalf("bajar un publicado por debajo de un borrador: %v", err)
+	}
 	_, err = svc.MoveChapter(ctx, author.ID, published.ID, true) // ya es el primero: no hace nada
 	must(err)
 	view, err := svc.ReadChapter(ctx, author, story.ID, published.ID)
