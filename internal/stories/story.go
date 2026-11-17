@@ -234,6 +234,69 @@ func kindOptions(emptyLabel string) []components.Option {
 	return append([]components.Option{{Value: "", Label: emptyLabel}}, Kinds...)
 }
 
+// UpdatedLater dice si la historia tiene un capítulo publicado otro día que su primera
+// publicación, para mostrar «actualizada el …» solo cuando aporta algo.
+func (s Story) UpdatedLater() bool {
+	if s.LastChapterAt == nil {
+		return false
+	}
+	if s.PublishedAt == nil {
+		return true
+	}
+	return formatDate(*s.LastChapterAt) != formatDate(*s.PublishedAt)
+}
+
+// Periodos de los filtros de fecha de explorar ("actualizada en…", "publicada en…"). Se ofrecen
+// periodos fijos en lugar de un calendario porque es lo que un lector suele buscar ("lo nuevo
+// de esta semana") y se elige en un clic. periodStart traduce cada valor a una fecha.
+const (
+	PeriodWeek    = "week"
+	PeriodMonth   = "month"
+	Period3Months = "3months"
+	PeriodYear    = "year"
+)
+
+// DatePeriods son las opciones de los filtros de fecha; "" no filtra.
+var DatePeriods = []components.Option{
+	{Value: "", Label: "Cualquier fecha"},
+	{Value: PeriodWeek, Label: "Última semana"},
+	{Value: PeriodMonth, Label: "Último mes"},
+	{Value: Period3Months, Label: "Últimos 3 meses"},
+	{Value: PeriodYear, Label: "Último año"},
+}
+
+// periodStart es el comienzo del periodo contado hacia atrás desde now. Para "" o un valor
+// desconocido devuelve la fecha cero, que no filtra.
+func periodStart(period string, now time.Time) time.Time {
+	switch period {
+	case PeriodWeek:
+		return now.AddDate(0, 0, -7)
+	case PeriodMonth:
+		return now.AddDate(0, -1, 0)
+	case Period3Months:
+		return now.AddDate(0, -3, 0)
+	case PeriodYear:
+		return now.AddDate(-1, 0, 0)
+	}
+	return time.Time{}
+}
+
+// Órdenes de explorar. SortRelevance ("") ordena por parecido con la búsqueda y, sin texto
+// que buscar, por las actualizadas más recientemente.
+const (
+	SortRelevance = ""
+	SortUpdated   = "updated"
+	SortNewest    = "newest"
+	SortOldest    = "oldest"
+)
+
+var ExploreSorts = []components.Option{
+	{Value: SortRelevance, Label: "Más relevantes"},
+	{Value: SortUpdated, Label: "Actualizadas recientemente"},
+	{Value: SortNewest, Label: "Publicadas recientemente"},
+	{Value: SortOldest, Label: "Publicadas hace más tiempo"},
+}
+
 var months = [...]string{"enero", "febrero", "marzo", "abril", "mayo", "junio", "julio",
 	"agosto", "septiembre", "octubre", "noviembre", "diciembre"}
 

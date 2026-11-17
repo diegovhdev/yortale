@@ -3,6 +3,7 @@ package moderation
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/diegovhdev/yortale/internal/auth"
@@ -35,10 +36,11 @@ func TestModerationIntegration(t *testing.T) {
 
 	// Una historia pública con un capítulo.
 	story, err := storySvc.Create(ctx, author.ID, stories.StoryInput{Title: "Robada", Kind: stories.KindOriginal,
+		Synopsis: strings.Repeat("Una historia de prueba. ", 5),
 		Language: "es", ContentRating: "general", Warnings: []string{stories.WarningNone}})
 	must(err)
 	_, chapter, err := storySvc.CreateChapter(ctx, author.ID, story.ID,
-		stories.ChapterInput{Title: "Uno", Content: "Texto copiado.", Publish: true})
+		stories.ChapterInput{Title: "Uno", Content: strings.Repeat("Texto copiado. ", 50), Publish: true})
 	must(err)
 
 	// ---------- Reportar ----------

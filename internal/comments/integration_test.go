@@ -42,12 +42,13 @@ func TestCommentsIntegration(t *testing.T) {
 	mod := register("moderadora", auth.RoleModerator)
 
 	story, err := storySvc.Create(ctx, author.ID, stories.StoryInput{Title: "Con comentarios", Kind: stories.KindOriginal,
+		Synopsis: strings.Repeat("Una historia de prueba. ", 5),
 		Language: "es", ContentRating: "general", Warnings: []string{stories.WarningNone}})
 	must(err)
 	_, draft, err := storySvc.CreateChapter(ctx, author.ID, story.ID, stories.ChapterInput{Title: "Borrador", Content: "Aún no."})
 	must(err)
 	_, chapter, err := storySvc.CreateChapter(ctx, author.ID, story.ID,
-		stories.ChapterInput{Title: "Uno", Content: "Había una vez.", Publish: true})
+		stories.ChapterInput{Title: "Uno", Content: strings.Repeat("Había una vez. ", 40), Publish: true})
 	must(err)
 	// Al publicar el primer capítulo la historia deja de ser borrador.
 	story, err = storySvc.Story(ctx, story.ID)

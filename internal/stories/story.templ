@@ -39,20 +39,10 @@ templ StoryPage(v StoryView) {
 			<h2>Capítulos</h2>
 			if len(v.Chapters) == 0 {
 				<p>Todavía no hay capítulos publicados.</p>
+			} else if v.IsAuthor {
+				@authorChapterList(v)
 			} else {
-				<ol class="chapter-list">
-					for i, c := range v.Chapters {
-						<li>
-							<a href={ templ.URL(c.URL(v.Story)) }>{ c.Title }</a>
-							if !c.IsPublished {
-								<small>(borrador)</small>
-							}
-							if v.IsAuthor {
-								@chapterActions(c, i == 0, i == len(v.Chapters)-1)
-							}
-						</li>
-					}
-				</ol>
+				@staticChapterList(v, nil)
 			}
 		</article>
 	}
@@ -85,6 +75,68 @@ templ storyFlags(s Story, staff, canReport bool, reportURL string) {
 			}
 		</p>
 	}
+}
+
+// staticChapterList es el índice de capítulos dibujado en el servidor: el de los lectores, y
+// el del autor sin JS (con chapterActions). attrs permite ocultarlo cuando Alpine dibuja el
+// del autor.
+templ staticChapterList(v StoryView, attrs templ.Attributes) {
+	<ol class="chapter-list" { attrs... }>
+		for i, c := range v.Chapters {
+			<li>
+				<a href={ templ.URL(c.URL(v.Story)) }>{ c.Title }</a>
+				if !c.IsPublished {
+					<small>(borrador)</small>
+				}
+				if v.IsAuthor {
+					@chapterActions(c, i == 0, i == len(v.Chapters)-1)
+				}
+			</li>
+		}
+	</ol>
+}
+
+// authorChapterList es el índice del autor, con reordenación optimista (componente
+// chapterOrder de web/static/js/chapter-order.js): con JS, Alpine dibuja la lista desde
+// data-chapters, las flechas mueven el capítulo al instante y la petición va por detrás; si
+// el servidor responde con error, vuelve al último orden confirmado. Sin JS se ve la lista
+// del servidor, cuyas flechas son formularios POST que recargan la página.
+templ authorChapterList(v StoryView) {
+	<div x-data="chapterOrder" data-chapters={ v.ChaptersJSON() }>
+		<p class="error" role="alert" x-cloak x-show="error" x-text="error"></p>
+		<p class="sr-only" aria-live="polite" x-text="status"></p>
+		@staticChapterList(v, templ.Attributes{"x-show": "false"})
+		<template x-if="true">
+			<ol class="chapter-list">
+				<template x-for="(c, i) in chapters" :key="c.id">
+					<li>
+						<a :href="c.url" x-text="c.title"></a>
+						<small x-show="c.draft">(borrador)</small>
+						<span class="actions">
+							<a :href="c.editURL">Editar</a>
+							<a :href="c.deleteURL">Borrar</a>
+							<button
+								type="button"
+								x-show="i > 0"
+								:data-move="c.id + '-up'"
+								:aria-label="'Subir ' + c.title"
+								title="Subir"
+								@click="move(i, -1)"
+							>↑</button>
+							<button
+								type="button"
+								x-show="i < chapters.length - 1"
+								:data-move="c.id + '-down'"
+								:aria-label="'Bajar ' + c.title"
+								title="Bajar"
+								@click="move(i, 1)"
+							>↓</button>
+						</span>
+					</li>
+				</template>
+			</ol>
+		</template>
+	</div>
 }
 
 // chapterActions son los controles del autor en el índice. Mover usa formularios POST
@@ -136,7 +188,10 @@ templ storyMeta(s Story) {
 		{ s.ContentRatingLabel() } · { s.StatusLabel() } · { s.LanguageLabel() } ·
 		{ plural(int64(s.ChapterCount), "capítulo", "capítulos") } ·
 		{ plural(s.ReadsCount, "lector", "lectores") }
-		if s.LastChapterAt != nil {
+		if s.PublishedAt != nil {
+			· publicada el { formatDate(*s.PublishedAt) }
+		}
+		if s.UpdatedLater() {
 			· actualizada el { formatDate(*s.LastChapterAt) }
 		}
 	</p>

@@ -22,6 +22,12 @@ const (
 	// maxTagSuggestions es cuántas sugerencias se ofrecen mientras el autor escribe un tag.
 	maxTagSuggestions = 10
 	maxChapterRunes   = 200_000
+	// minPublishWords es lo mínimo que debe tener un capítulo para publicarse (HU6), para que
+	// no se publiquen avances de una línea. Un borrador puede guardarse más corto.
+	minPublishWords = 100
+	// minSynopsisWords es lo mínimo que debe tener la sinopsis para publicar la historia (ver
+	// synopsisError). Los borradores pueden tenerla más corta o vacía.
+	minSynopsisWords = 20
 	// maxSlugAttempts limita cuántos sufijos (-2, -3...) se prueban si el autor repite título.
 	maxSlugAttempts = 50
 	// genresTTL es cuánto se guardan en memoria los géneros. Solo cambian a mano en la base
@@ -193,6 +199,10 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 	}
 	if utf8.RuneCountInString(p.Synopsis) > 4000 {
 		errs["synopsis"] = "La sinopsis no puede tener más de 4000 caracteres."
+	} else if p.Status != StatusDraft {
+		if msg := synopsisError(p.Synopsis); msg != "" {
+			errs["synopsis"] = msg
+		}
 	}
 	if !validOption(Kinds, p.Kind) {
 		errs["kind"] = "Elige si la historia es original o un fanfic."
@@ -217,6 +227,40 @@ func (s *Service) validateStory(ctx context.Context, in StoryInput) (StoryParams
 		return p, errs
 	}
 	return p, nil
+}
+
+// synopsisError explica por qué la sinopsis no basta para publicar la historia, o devuelve ""
+// si basta. Un borrador puede guardarse con cualquier sinopsis: el mínimo se pide cuando la
+// historia va a verse, al sacarla del borrador desde su formulario (validateStory) o al
+// publicar su primer capítulo (publishBlocker).
+func synopsisError(synopsis string) string {
+	switch words := countWords(synopsis); {
+	case words == 0:
+		return fmt.Sprintf("Para publicar la historia, escribe una sinopsis de al menos %d palabras.", minSynopsisWords)
+	case words < minSynopsisWords:
+		return fmt.Sprintf("Para publicar la historia, la sinopsis necesita al menos %d palabras (tiene %d), "+
+			"para que los lectores sepan de qué trata.", minSynopsisWords, words)
+	}
+	return ""
+}
+
+// publishBlocker explica por qué un capítulo de la historia no puede publicarse todavía, o
+// devuelve "" si puede. Solo afecta a los borradores: publicar un capítulo saca la historia del
+// borrador (touchStory), así que antes debe tener una sinopsis suficiente.
+func publishBlocker(story Story) string {
+	if !story.IsDraft() {
+		return ""
+	}
+	return synopsisError(story.Synopsis)
+}
+
+// downgradeIfBlocked convierte la publicación en un borrador si la historia aún no puede
+// publicarse: el autor no pierde lo que escribió, y el handler le explica qué falta al ver que
+// pidió publicar y el capítulo no quedó publicado (ver Handler.chapterSaved).
+func downgradeIfBlocked(story Story, p *ChapterParams) {
+	if p.Publish && publishBlocker(story) != "" {
+		p.Publish = false
+	}
 }
 
 // validateGenres pasa a p.GenreIDs los géneros elegidos, en el orden en que llegan: con JS, el
@@ -410,7 +454,13 @@ type ExploreFilter struct {
 	ExcludeWarnings []string
 	Tags            []string // slugs; la historia debe tenerlos todos
 	ExcludeTags     []string // slugs; la historia no puede tener ninguno
-	Page            int      // empieza en 1
+	// UpdatedSince deja las historias con un capítulo publicado desde esa fecha (o, si no
+	// tienen ninguno, publicadas desde entonces); PublishedSince, las publicadas por primera
+	// vez desde esa fecha. La fecha cero no filtra.
+	UpdatedSince   time.Time
+	PublishedSince time.Time
+	Sort           string // uno de los valores de ExploreSorts
+	Page           int    // empieza en 1
 }
 
 func (s *Service) Explore(ctx context.Context, f ExploreFilter) (stories []Story, hasNext bool, err error) {
@@ -508,6 +558,9 @@ func validateChapter(in ChapterInput) (ChapterParams, error) {
 		errs["content"] = "El capítulo está vacío."
 	case n > maxChapterRunes:
 		errs["content"] = "El capítulo no puede tener más de 200 000 caracteres. Divídelo en varios."
+	case p.Publish && p.WordCount < minPublishWords:
+		errs["content"] = fmt.Sprintf("Para publicar, el capítulo necesita al menos %d palabras (tiene %d). "+
+			"Puedes guardarlo sin publicar y seguir más tarde.", minPublishWords, p.WordCount)
 	}
 	if len(errs) > 0 {
 		return p, errs
@@ -515,6 +568,8 @@ func validateChapter(in ChapterInput) (ChapterParams, error) {
 	return p, nil
 }
 
+// CreateChapter y UpdateChapter guardan el capítulo. Si in.Publish pero la historia aún no
+// puede publicarse (publishBlocker), lo guardan como borrador en lugar de dar error.
 func (s *Service) CreateChapter(ctx context.Context, authorID, storyID int64, in ChapterInput) (Story, Chapter, error) {
 	story, err := s.ForAuthor(ctx, authorID, storyID)
 	if err != nil {
@@ -524,6 +579,7 @@ func (s *Service) CreateChapter(ctx context.Context, authorID, storyID int64, in
 	if err != nil {
 		return story, Chapter{}, err
 	}
+	downgradeIfBlocked(story, &p)
 	c, err := s.chapters.Create(ctx, story.ID, p)
 	return story, c, err
 }
@@ -567,6 +623,7 @@ func (s *Service) UpdateChapter(ctx context.Context, authorID, chapterID int64, 
 	if err != nil {
 		return story, c, err
 	}
+	downgradeIfBlocked(story, &p)
 	c, err = s.chapters.Update(ctx, chapterID, p)
 	return story, c, err
 }

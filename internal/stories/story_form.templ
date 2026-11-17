@@ -44,13 +44,23 @@ templ StoryFormFragment(f StoryForm) {
 			Required: true,
 			Attrs:    templ.Attributes{"maxlength": "200"},
 		})
-		@components.TextArea(components.FieldProps{
-			Label: "Sinopsis",
-			Name:  "synopsis",
-			Value: f.Synopsis,
-			Error: f.Errors["synopsis"],
-			Attrs: templ.Attributes{"rows": "6", "maxlength": "4000"},
-		})
+		<div class="word-counted" x-data="wordCount" data-min={ strconv.Itoa(minSynopsisWords) } data-goal="poder publicarla">
+			@components.TextArea(components.FieldProps{
+				Label: "Sinopsis",
+				Name:  "synopsis",
+				Value: f.Synopsis,
+				Error: f.Errors["synopsis"],
+				Attrs: templ.Attributes{"rows": "6", "maxlength": "4000",
+					"x-init": "count($el.value)", "@input": "count($event.target.value)"},
+			})
+			<small>
+				Cuenta de qué trata la historia sin desvelar el final. Puedes dejarla para después,
+				pero para publicar la historia necesita al menos { strconv.Itoa(minSynopsisWords) } palabras.
+			</small>
+			<template x-if="true">
+				<small class="word-count" :class="{ short: words < min }" aria-live="polite" x-text="label()"></small>
+			</template>
+		</div>
 		@components.Radios(components.RadioProps{
 			Legend:  "Tipo",
 			Name:    "kind",

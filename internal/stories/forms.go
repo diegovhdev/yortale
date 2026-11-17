@@ -168,6 +168,9 @@ type ChapterForm struct {
 	Publish   bool
 	Errors    map[string]string
 	General   string
+	// DraftNotice explica por qué el capítulo se acaba de guardar como borrador aunque el
+	// autor pidió publicarlo (publishBlocker); vacío si no es el caso.
+	DraftNotice string
 }
 
 func newChapterForm(s Story) ChapterForm {

@@ -17,6 +17,26 @@ type StoryView struct {
 	IsStaff  bool // quien mira es del equipo de moderación
 }
 
+// ChaptersJSON es el índice para el componente chapterOrder de Alpine (data-chapters), con
+// los enlaces ya construidos para no repetir en JS cómo se forman las URL.
+func (v StoryView) ChaptersJSON() string {
+	type item struct {
+		ID        int64  `json:"id"`
+		Title     string `json:"title"`
+		Draft     bool   `json:"draft"`
+		URL       string `json:"url"`
+		EditURL   string `json:"editURL"`
+		DeleteURL string `json:"deleteURL"`
+		MoveURL   string `json:"moveURL"`
+	}
+	items := make([]item, 0, len(v.Chapters))
+	for _, c := range v.Chapters {
+		items = append(items, item{ID: c.ID, Title: c.Title, Draft: !c.IsPublished, URL: c.URL(v.Story),
+			EditURL: c.EditURL(), DeleteURL: c.DeleteURL(), MoveURL: c.MoveURL()})
+	}
+	return mustJSON(items)
+}
+
 // CanReport dice si se muestra el enlace para reportar: no a su autor, y no si ya está oculta.
 func (v StoryView) CanReport() bool { return !v.IsAuthor && !v.Story.IsHidden() }
 
@@ -43,10 +63,14 @@ type ExploreView struct {
 	// (nombres separados por comas), para volver a mostrarlo en el formulario.
 	Tags        string
 	ExcludeTags string
-	Genres      []Genre
-	Stories     []Story
-	Page        int
-	HasNext     bool
+	// Updated y Published son periodos de DatePeriods ("" no filtra); Sort, uno de ExploreSorts.
+	Updated   string
+	Published string
+	Sort      string
+	Genres    []Genre
+	Stories   []Story
+	Page      int
+	HasNext   bool
 }
 
 // PageURL construye el enlace a otra página conservando la búsqueda y los filtros.
@@ -70,6 +94,15 @@ func (v ExploreView) PageURL(page int) string {
 	if v.ExcludeTags != "" {
 		q.Set("exclude_tags", v.ExcludeTags)
 	}
+	if v.Updated != "" {
+		q.Set("updated", v.Updated)
+	}
+	if v.Published != "" {
+		q.Set("published", v.Published)
+	}
+	if v.Sort != SortRelevance {
+		q.Set("sort", v.Sort)
+	}
 	if page > 1 {
 		q.Set("page", strconv.Itoa(page))
 	}
@@ -87,7 +120,7 @@ func (v ExploreView) HasGenre(id int16) bool {
 // Filtered dice si hay alguna búsqueda o filtro activo.
 func (v ExploreView) Filtered() bool {
 	return v.Query != "" || len(v.GenreIDs) > 0 || v.Kind != "" || len(v.ExcludeWarnings) > 0 ||
-		v.Tags != "" || v.ExcludeTags != ""
+		v.Tags != "" || v.ExcludeTags != "" || v.Updated != "" || v.Published != ""
 }
 
 // Excludes dice si el lector oculta las historias con esa advertencia.

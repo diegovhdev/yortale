@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/platform/dbtest"
@@ -17,6 +18,12 @@ func createUser(t *testing.T, pool *pgxpool.Pool, username string) *auth.User {
 	t.Helper()
 	return &auth.User{ID: dbtest.CreateUser(t, pool, username), Username: username}
 }
+
+// longText llega al mínimo de palabras para publicar un capítulo.
+var longText = strings.Repeat("palabra ", minPublishWords)
+
+// testSynopsis tiene justo minSynopsisWords palabras, con un \r\n para comprobar que se normaliza.
+const testSynopsis = "Un dragón\r\nque vuela sobre las montañas del norte buscando a la última persona que todavía recuerda su nombre verdadero."
 
 func TestStoriesIntegration(t *testing.T) {
 	pool := dbtest.New(t)
@@ -32,7 +39,7 @@ func TestStoriesIntegration(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	in := StoryInput{Title: "El Último Dragón", Synopsis: "Un dragón\r\nque vuela.", Kind: KindFanfic, Language: "es", ContentRating: "general",
+	in := StoryInput{Title: "El Último Dragón", Synopsis: testSynopsis, Kind: KindFanfic, Language: "es", ContentRating: "general",
 		GenreIDs: []string{"3", "", "1"},                   // Ciencia ficción y Fantasía; el hueco se cierra
 		Warnings: []string{"declined", "graphic_violence"}} // se guardan en el orden de ContentWarnings
 
@@ -47,7 +54,7 @@ func TestStoriesIntegration(t *testing.T) {
 	// Crear: borrador, slug sin acentos, y sufijo si el autor repite título.
 	story, err := svc.Create(ctx, author.ID, in)
 	must(err)
-	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.Kind != KindFanfic || !slices.Equal(genreIDs(story), []int16{3, 1}) || story.Synopsis != "Un dragón\nque vuela." ||
+	if story.Slug != "el-ultimo-dragon" || !story.IsDraft() || story.Kind != KindFanfic || !slices.Equal(genreIDs(story), []int16{3, 1}) || story.Synopsis != strings.ReplaceAll(testSynopsis, "\r\n", "\n") ||
 		!slices.Equal(story.Warnings, []string{"graphic_violence", WarningDeclined}) {
 		t.Fatalf("historia creada inesperada: %+v", story)
 	}
@@ -102,7 +109,7 @@ func TestStoriesIntegration(t *testing.T) {
 	// Capítulos: uno en borrador y otro publicado. Publicar saca la historia del borrador.
 	_, draft, err := svc.CreateChapter(ctx, author.ID, story.ID, ChapterInput{Title: "Uno", Content: "Hola  mundo\n\nadiós"})
 	must(err)
-	_, published, err := svc.CreateChapter(ctx, author.ID, story.ID, ChapterInput{Title: "Dos", Content: "texto", Publish: true})
+	_, published, err := svc.CreateChapter(ctx, author.ID, story.ID, ChapterInput{Title: "Dos", Content: longText, Publish: true})
 	must(err)
 	if draft.Position != 1 || published.Position != 2 || draft.WordCount != 3 || published.PublishedAt == nil {
 		t.Fatalf("capítulos inesperados: %+v / %+v", draft, published)
@@ -143,6 +150,26 @@ func TestStoriesIntegration(t *testing.T) {
 	}
 	if found, _, err := svc.Explore(ctx, ExploreFilter{Kind: KindFanfic, GenreIDs: second}); err != nil || len(found) != 1 {
 		t.Fatalf("el filtro de tipo y género no encontró la historia: %v %v", found, err)
+	}
+
+	// Fechas: la historia se publicó y se actualizó ahora mismo. Todos los órdenes funcionan.
+	now := time.Now()
+	for _, tc := range []struct {
+		name string
+		f    ExploreFilter
+		want int
+	}{
+		{"actualizada en la última semana", ExploreFilter{UpdatedSince: periodStart(PeriodWeek, now)}, 1},
+		{"publicada en el último año", ExploreFilter{PublishedSince: periodStart(PeriodYear, now)}, 1},
+		{"actualizada desde mañana", ExploreFilter{UpdatedSince: now.Add(24 * time.Hour)}, 0},
+		{"publicada desde mañana", ExploreFilter{PublishedSince: now.Add(24 * time.Hour)}, 0},
+		{"orden actualizadas", ExploreFilter{Sort: SortUpdated}, 1},
+		{"orden recientes", ExploreFilter{Sort: SortNewest, Query: "dragón"}, 1},
+		{"orden antiguas", ExploreFilter{Sort: SortOldest}, 1},
+	} {
+		if found, _, err := svc.Explore(ctx, tc.f); err != nil || len(found) != tc.want {
+			t.Fatalf("%s: %d historias, se esperaban %d (%v)", tc.name, len(found), tc.want, err)
+		}
 	}
 
 	// Ocultar advertencias: la historia tiene violencia gráfica y «prefiere no advertir».
@@ -272,7 +299,7 @@ func TestStoriesIntegration(t *testing.T) {
 	}
 
 	// Editar y publicar el borrador; borrar el primero cierra el hueco de posiciones.
-	_, draft, err = svc.UpdateChapter(ctx, author.ID, draft.ID, ChapterInput{Title: "Uno bis", Content: "nuevo", Publish: true})
+	_, draft, err = svc.UpdateChapter(ctx, author.ID, draft.ID, ChapterInput{Title: "Uno bis", Content: longText, Publish: true})
 	must(err)
 	if !draft.IsPublished || draft.PublishedAt == nil || draft.Title != "Uno bis" {
 		t.Fatalf("capítulo editado inesperado: %+v", draft)
@@ -331,5 +358,25 @@ func TestStoriesIntegration(t *testing.T) {
 	must(svc.Delete(ctx, author.ID, story.ID))
 	if mine, err := svc.ByAuthor(ctx, author.ID); err != nil || len(mine) != 1 {
 		t.Fatalf("historias del autor tras borrar: %v %v", mine, err)
+	}
+
+	// Un borrador puede tener la sinopsis corta, pero no publicarse: pedir publicar un capítulo
+	// lo guarda como borrador y la historia sigue sin verse. Con la sinopsis completa, sí.
+	pending, err := svc.Create(ctx, author.ID, StoryInput{Title: "Sin sinopsis", Synopsis: "Ya la escribiré.",
+		Kind: KindOriginal, Language: "es", ContentRating: "general", Warnings: []string{WarningNone}})
+	must(err)
+	_, kept, err := svc.CreateChapter(ctx, author.ID, pending.ID, ChapterInput{Title: "Uno", Content: longText, Publish: true})
+	must(err)
+	if pending, err = svc.Story(ctx, pending.ID); err != nil || kept.IsPublished || !pending.IsDraft() {
+		t.Fatalf("con sinopsis corta se publicó: capítulo %+v, historia %+v (%v)", kept, pending, err)
+	}
+	in = StoryInput{Title: pending.Title, Synopsis: testSynopsis, Kind: pending.Kind, Language: "es",
+		ContentRating: "general", Warnings: []string{WarningNone}, Status: StatusDraft}
+	_, err = svc.Update(ctx, author.ID, pending.ID, in)
+	must(err)
+	_, kept, err = svc.UpdateChapter(ctx, author.ID, kept.ID, ChapterInput{Title: "Uno", Content: longText, Publish: true})
+	must(err)
+	if pending, err = svc.Story(ctx, pending.ID); err != nil || !kept.IsPublished || pending.IsDraft() {
+		t.Fatalf("con la sinopsis completa no se publicó: capítulo %+v, historia %+v (%v)", kept, pending, err)
 	}
 }

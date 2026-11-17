@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/a-h/templ"
 	"github.com/diegovhdev/yortale/internal/auth"
@@ -73,7 +74,19 @@ func (h *Handler) Explore(w http.ResponseWriter, r *http.Request) {
 	if !validOption(Kinds, view.Kind) {
 		view.Kind = ""
 	}
-	filter := ExploreFilter{Query: view.Query, Kind: view.Kind, Page: view.Page}
+	// Como el resto de filtros, un periodo u orden desconocido se ignora.
+	if view.Updated = q.Get("updated"); !validOption(DatePeriods, view.Updated) {
+		view.Updated = ""
+	}
+	if view.Published = q.Get("published"); !validOption(DatePeriods, view.Published) {
+		view.Published = ""
+	}
+	if view.Sort = q.Get("sort"); !validOption(ExploreSorts, view.Sort) {
+		view.Sort = SortRelevance
+	}
+	now := time.Now()
+	filter := ExploreFilter{Query: view.Query, Kind: view.Kind, Page: view.Page, Sort: view.Sort,
+		UpdatedSince: periodStart(view.Updated, now), PublishedSince: periodStart(view.Published, now)}
 	// Es un filtro y no un formulario que se guarda, así que los valores raros se ignoran en vez
 	// de dar error: ids que no son números, repetidos y los que pasan de maxGenres.
 	for _, raw := range q["genre"] {

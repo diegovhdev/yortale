@@ -382,6 +382,38 @@ form[action$="/delete"] button:hover {
   margin-bottom: 1rem;
 }
 
+/* Fechas y orden: los tres desplegables en una fila; en pantallas estrechas bajan solos. */
+.date-filter {
+  margin-bottom: 1.25rem;
+}
+
+.date-filter-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: 0 1rem;
+}
+
+.search .date-filter .field {
+  margin-bottom: 0;
+}
+
+/* Campos con recuento de palabras (texto del capítulo, sinopsis): las notas bajo el área
+   de texto, como form > small. */
+.word-counted > small {
+  display: block;
+  margin: -0.75rem 0 1.25rem;
+  color: var(--color-text-subtle);
+}
+
+.word-counted > small.word-count {
+  margin-top: -1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.word-counted > small.word-count.short {
+  color: var(--color-brand-primary);
+}
+
 /* Página de una historia y perfil de autor */
 
 .story > h1 + p,
@@ -469,6 +501,19 @@ form[action$="/delete"] button:hover {
 .chapter-list .actions button {
   padding: 0.25rem 0.65rem;
   font-size: 0.8rem;
+}
+
+/* Solo para lectores de pantalla: fuera de la vista pero no oculto (p. ej. avisos aria-live). */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* Lectura de un capítulo */

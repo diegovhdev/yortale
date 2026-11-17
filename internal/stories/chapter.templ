@@ -1,6 +1,10 @@
 package stories
 
-import "github.com/diegovhdev/yortale/web/components"
+import (
+	"strconv"
+
+	"github.com/diegovhdev/yortale/web/components"
+)
 
 // comments es la sección de comentarios que dibuja el paquete comments (ver CommentSection).
 templ ChapterPage(v ChapterView, comments templ.Component) {
@@ -63,6 +67,14 @@ templ ChapterFormFragment(f ChapterForm) {
 		if f.General != "" {
 			<p class="error" role="alert">{ f.General }</p>
 		}
+		if f.DraftNotice != "" {
+			<p class="notice" role="status">
+				Guardamos el capítulo como borrador, así que todavía no lo ven los lectores.
+				{ f.DraftNotice }
+				<a href={ templ.URL(f.Story.EditURL()) }>Completar la sinopsis</a>
+				y después vuelve aquí para marcarlo como publicado.
+			</p>
+		}
 		@components.Field(components.FieldProps{
 			Label:    "Título del capítulo",
 			Name:     "title",
@@ -72,15 +84,24 @@ templ ChapterFormFragment(f ChapterForm) {
 			Required: true,
 			Attrs:    templ.Attributes{"maxlength": "200"},
 		})
-		@components.TextArea(components.FieldProps{
-			Label:    "Texto",
-			Name:     "content",
-			Value:    f.Content,
-			Error:    f.Errors["content"],
-			Required: true,
-			Attrs:    templ.Attributes{"rows": "20"},
-		})
-		<small>Deja una línea en blanco entre párrafos.</small>
+		<div class="word-counted" x-data="wordCount" data-min={ strconv.Itoa(minPublishWords) } data-goal="poder publicarlo">
+			@components.TextArea(components.FieldProps{
+				Label:    "Texto",
+				Name:     "content",
+				Value:    f.Content,
+				Error:    f.Errors["content"],
+				Required: true,
+				Attrs: templ.Attributes{"rows": "20",
+					"x-init": "count($el.value)", "@input": "count($event.target.value)"},
+			})
+			<small>
+				Deja una línea en blanco entre párrafos. Para publicarlo necesita al menos
+				{ strconv.Itoa(minPublishWords) } palabras.
+			</small>
+			<template x-if="true">
+				<small class="word-count" :class="{ short: words < min }" aria-live="polite" x-text="label()"></small>
+			</template>
+		</div>
 		<div class="field">
 			<label>
 				<input type="checkbox" name="publish" checked?={ f.Publish }/>

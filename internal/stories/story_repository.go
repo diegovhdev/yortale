@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/diegovhdev/yortale/internal/platform/database"
 	"github.com/jackc/pgx/v5"
@@ -211,8 +212,9 @@ func (r *StoryRepository) Get(ctx context.Context, id int64) (Story, error) {
 // que funciona mejor con búsquedas cortas. Sin query, ordena por las actualizadas más recientemente.
 // Con f.GenreIDs o f.Tags, la historia debe tenerlos todos (en cualquier posición); con
 // f.ExcludeWarnings o f.ExcludeTags, no puede tener ninguno. Los campos vacíos no filtran.
+// f.Sort elige el orden (exploreOrder); el id desempata para que la paginación sea estable.
 func (r *StoryRepository) ListPublished(ctx context.Context, f ExploreFilter, limit, offset int) ([]Story, error) {
-	const q = `
+	q := `
 		SELECT ` + storyColumns + ` FROM stories s` + storyJoins + `
 		WHERE s.status <> 'draft' AND s.hidden_at IS NULL
 			AND ($1::text = '' OR s.search @@ websearch_to_tsquery('spanish', $1)
@@ -226,15 +228,13 @@ func (r *StoryRepository) ListPublished(ctx context.Context, f ExploreFilter, li
 					WHERE st.story_id = s.id))
 			AND NOT EXISTS (SELECT 1 FROM story_tags st JOIN tags t ON t.id = st.tag_id
 				WHERE st.story_id = s.id AND t.slug = ANY ($8::text[]))
-		ORDER BY
-			CASE WHEN $1 = '' THEN 0
-				ELSE ts_rank(s.search, websearch_to_tsquery('spanish', $1)) + word_similarity($1, s.title)
-			END DESC,
-			s.last_chapter_at DESC NULLS LAST,
-			s.id DESC
+			AND ($9::timestamptz IS NULL OR coalesce(s.last_chapter_at, s.published_at) >= $9)
+			AND ($10::timestamptz IS NULL OR s.published_at >= $10)
+		ORDER BY ` + exploreOrder(f.Sort) + `
 		LIMIT $3 OFFSET $4`
 
-	rows, err := r.db.Query(ctx, q, f.Query, f.GenreIDs, limit, offset, f.Kind, f.ExcludeWarnings, f.Tags, f.ExcludeTags)
+	rows, err := r.db.Query(ctx, q, f.Query, f.GenreIDs, limit, offset, f.Kind, f.ExcludeWarnings, f.Tags, f.ExcludeTags,
+		nullTime(f.UpdatedSince), nullTime(f.PublishedSince))
 	if err != nil {
 		return nil, fmt.Errorf("listar historias: %w", err)
 	}
@@ -243,6 +243,32 @@ func (r *StoryRepository) ListPublished(ctx context.Context, f ExploreFilter, li
 		return nil, fmt.Errorf("listar historias: %w", err)
 	}
 	return stories, nil
+}
+
+// exploreOrder es el ORDER BY de ListPublished. Solo devuelve SQL fijo de este switch, nunca
+// texto del usuario, así que puede concatenarse a la consulta. $1 es la búsqueda.
+func exploreOrder(sort string) string {
+	switch sort {
+	case SortUpdated:
+		return `s.last_chapter_at DESC NULLS LAST, s.id DESC`
+	case SortNewest:
+		return `s.published_at DESC NULLS LAST, s.id DESC`
+	case SortOldest:
+		return `s.published_at ASC NULLS LAST, s.id ASC`
+	}
+	return `CASE WHEN $1 = '' THEN 0
+			ELSE ts_rank(s.search, websearch_to_tsquery('spanish', $1)) + word_similarity($1, s.title)
+		END DESC,
+		s.last_chapter_at DESC NULLS LAST,
+		s.id DESC`
+}
+
+// nullTime pasa la fecha cero como NULL, para los filtros opcionales.
+func nullTime(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 // ListByAuthor devuelve todas las historias del autor, borradores y ocultas incluidas.

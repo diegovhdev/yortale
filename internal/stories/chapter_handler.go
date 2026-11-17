@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/diegovhdev/yortale/internal/auth"
 	"github.com/diegovhdev/yortale/internal/platform/httpx"
@@ -73,7 +74,7 @@ func (h *Handler) CreateChapter(w http.ResponseWriter, r *http.Request) {
 		h.renderChapterFormError(w, r, err, form, "crear capítulo")
 		return
 	}
-	httpx.Redirect(w, r, c.URL(story))
+	chapterSaved(w, r, story, c, r.PostFormValue("publish") == "on")
 }
 
 // GET /chapters/{id}/edit
@@ -88,7 +89,12 @@ func (h *Handler) EditChapter(w http.ResponseWriter, r *http.Request) {
 		fail(w, err, "buscar capítulo")
 		return
 	}
-	httpx.Render(w, r, http.StatusOK, ChapterFormPage(editChapterForm(story, c)))
+	form := editChapterForm(story, c)
+	// Si ya completó la sinopsis (por ejemplo, volviendo atrás), el aviso sobra.
+	if r.URL.Query().Get("saved") == "draft" && !c.IsPublished {
+		form.DraftNotice = publishBlocker(story)
+	}
+	httpx.Render(w, r, http.StatusOK, ChapterFormPage(form))
 }
 
 // POST /chapters/{id}/edit
@@ -115,8 +121,24 @@ func (h *Handler) UpdateChapter(w http.ResponseWriter, r *http.Request) {
 		h.renderChapterFormError(w, r, err, edit, "actualizar capítulo")
 		return
 	}
+	chapterSaved(w, r, story, c, form.Publish)
+}
+
+// chapterSaved redirige tras guardar un capítulo: a leerlo, o, si el autor pidió publicarlo y
+// el servicio lo guardó como borrador porque la historia aún no puede publicarse, a su
+// formulario con savedAsDraftParam, que muestra qué falta (ver EditChapter).
+func chapterSaved(w http.ResponseWriter, r *http.Request, story Story, c Chapter, askedToPublish bool) {
+	if askedToPublish && !c.IsPublished {
+		httpx.Redirect(w, r, c.EditURL()+"?"+savedAsDraftParam)
+		return
+	}
 	httpx.Redirect(w, r, c.URL(story))
 }
+
+// savedAsDraftParam es la marca en la URL del formulario de capítulo que indica que se acaba
+// de guardar como borrador en lugar de publicarse. Va en la URL y no en una cookie porque es
+// lo único que hace falta recordar entre la redirección y la página.
+const savedAsDraftParam = "saved=draft"
 
 func (h *Handler) renderChapterFormError(w http.ResponseWriter, r *http.Request, err error, form ChapterForm, msg string) {
 	status := http.StatusUnprocessableEntity
@@ -188,6 +210,12 @@ func (h *Handler) MoveChapter(w http.ResponseWriter, r *http.Request) {
 	story, err := h.stories.MoveChapter(r.Context(), auth.CurrentUser(r.Context()).ID, id, direction == "up")
 	if err != nil {
 		fail(w, err, "mover capítulo")
+		return
+	}
+	// El componente chapterOrder (Alpine) ya movió el capítulo en pantalla: le basta con saber
+	// que salió bien. Lo pide con Accept: application/json; un formulario sin JS no lo envía.
+	if strings.Contains(r.Header.Get("Accept"), "application/json") {
+		w.WriteHeader(http.StatusNoContent)
 		return
 	}
 	httpx.Redirect(w, r, story.URL())

@@ -37,6 +37,7 @@ templ ExplorePage(v ExploreView) {
 				Attrs: templ.Attributes{"placeholder": "Separados por comas"},
 			})
 			@warningFilter(v)
+			@dateFilter(v)
 			<button type="submit">Buscar</button>
 		</form>
 		if len(v.Stories) == 0 {
@@ -143,6 +144,34 @@ templ genreFilter(v ExploreView) {
 					<span>{ g.Name }</span>
 				</label>
 			}
+		</div>
+	</fieldset>
+}
+
+// dateFilter son los filtros por fecha y el orden de los resultados, en una fila: periodos
+// fijos (última semana, último mes…) en lugar de un calendario, para elegir en un clic.
+templ dateFilter(v ExploreView) {
+	<fieldset class="date-filter">
+		<legend>Fechas y orden</legend>
+		<div class="date-filter-fields">
+			@components.Select(components.SelectProps{
+				Label:   "Actualizada en",
+				Name:    "updated",
+				Value:   v.Updated,
+				Options: DatePeriods,
+			})
+			@components.Select(components.SelectProps{
+				Label:   "Publicada en",
+				Name:    "published",
+				Value:   v.Published,
+				Options: DatePeriods,
+			})
+			@components.Select(components.SelectProps{
+				Label:   "Ordenar por",
+				Name:    "sort",
+				Value:   v.Sort,
+				Options: ExploreSorts,
+			})
 		</div>
 	</fieldset>
 }
